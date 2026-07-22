@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.14',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.15',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -90,8 +90,9 @@ var CONFIG = {
   ECONOMY: {
     CURRENCY: 'ÉCLATS',       // monnaie in-game, symbole ◆
     SYMBOL: '◆',
-    DAILY_WIN_REWARD: 100,    // première réussite du défi du jour uniquement
-    DAILY_STREAK_BONUS: 10,   // + BONUS × série (après incrément) à chaque réussite
+    DAILY_WIN_REWARD: 50,     // première réussite du défi du jour uniquement
+                              // (baissé de 100 → 50 le 2026-07-23, demande client)
+    DAILY_STREAK_BONUS: 5,    // + BONUS × série (après incrément) à chaque réussite
     ARCADE_RATE: 1000,        // arcade : floor(score / RATE) éclats par partie
   },
 

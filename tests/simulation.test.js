@@ -299,14 +299,15 @@ function freshMeta() {
 
 /* ==================================================== CASE e2-e4 : économie */
 (function () {
-  // e2 : première réussite quotidienne -> shardsEarned = 100 + 10*streak ; rejouer le même jour -> 0
+  // e2 : première réussite quotidienne -> shardsEarned = WIN_REWARD + BONUS*streak ;
+  // rejouer le même jour -> 0 (valeurs lues dans CONFIG pour suivre l'équilibrage)
   var M = freshMeta();
   var win1 = M.recordRun({ mode: 'daily', score: 1250, maxCombo: 5, dateStr: '2026-07-20' });
-  var expected1 = 100 + 10 * win1.streak; // streak=1 -> 110
+  var expected1 = CONFIG.ECONOMY.DAILY_WIN_REWARD + CONFIG.ECONOMY.DAILY_STREAK_BONUS * win1.streak;
   var replaySameDay = M.recordRun({ mode: 'daily', score: 1300, maxCombo: 5, dateStr: '2026-07-20' });
-  check('e2) 1ère réussite daily -> shardsEarned=100+10*streak, rejouer le même jour -> 0',
-    win1.shardsEarned === expected1 && win1.shardsEarned === 110 && win1.shards === 110
-    && replaySameDay.shardsEarned === 0 && replaySameDay.shards === 110,
+  check('e2) 1ère réussite daily -> shardsEarned=WIN_REWARD+BONUS*streak, rejouer le même jour -> 0',
+    win1.shardsEarned === expected1 && win1.shards === expected1
+    && replaySameDay.shardsEarned === 0 && replaySameDay.shards === expected1,
     'win1=' + win1.shardsEarned + '/' + win1.shards + ' replay=' + replaySameDay.shardsEarned + '/' + replaySameDay.shards);
 
   // e3 : arcade -> floor(score / ARCADE_RATE) éclats
