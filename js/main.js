@@ -354,7 +354,6 @@
     }
 
     var view = { screen: screen, engineState: engine ? engine.state : null, meta: meta, menu: menu, mode: currentMode, portraitBlocked: portraitBlocked };
-    if (screen === "TITLE") view.debug = BladeAudio.debugInfo();
     BladeUI.render(dt, view);
 
     requestAnimationFrame(frame);
