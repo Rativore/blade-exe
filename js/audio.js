@@ -45,6 +45,23 @@ var BladeAudio = (function () {
     }
   }
 
+  // App en arrière-plan / écran verrouillé → silence total (la session
+  // 'playback' anti-commutateur-silencieux laisserait sinon la musique
+  // continuer téléphone fermé). Retour au premier plan → reprise.
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", function () {
+      if (!ctx) return;
+      if (document.hidden) {
+        if (typeof ctx.suspend === "function") ctx.suspend();
+      } else {
+        resume();
+      }
+    });
+    window.addEventListener("pagehide", function () {
+      if (ctx && typeof ctx.suspend === "function") ctx.suspend();
+    });
+  }
+
   // Déblocage historique iOS : jouer un échantillon muet DANS le geste
   var unlocked = false;
   function playSilentBuffer() {
