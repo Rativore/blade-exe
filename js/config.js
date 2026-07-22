@@ -18,7 +18,7 @@
 
 var CONFIG = {
 
-  VERSION: '1.5',             // affichée à l'écran titre — à incrémenter
+  VERSION: '1.6',             // affichée à l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -187,8 +187,10 @@ var CONFIG = {
  *                              // débloque parfois le son qu'au relâchement)
  * BladeAudio.play(name)        // 'slice'|'wrong'|'virus'|'miss'|'wave'|'slowmo'
  *                              // |'boss'|'bossDone'|'over'|'dailyWin'|'click'
- * BladeAudio.startMusic() / BladeAudio.stopMusic()
- *   Boucle musicale procédurale style hyperpop/glitchcore : ~160 BPM, lead saw
+ * BladeAudio.startMusic(kind) / BladeAudio.stopMusic()
+ *   kind 'menu' : nappe synthwave calme (~90 BPM, pads détunés + arpège lent +
+ *   sub discret, boucle 8 mesures) pour l'écran titre.
+ *   kind 'game' (défaut si omis) : boucle hyperpop/glitchcore : ~160 BPM, lead saw
  *   arpégé (gamme mineure), sub bass avec pompe side-chain, hi-hats avec
  *   rafales stutter 1/32, snare claps, glitchs de pitch occasionnels —
  *   séquencée via un scheduler setInterval + AudioContext.currentTime.
@@ -207,6 +209,11 @@ var CONFIG = {
  *   HUD — remplissage score/CONFIG.DAILY.GOAL, libellé 'DÉFI x%', passe dorée
  *   (GOLD) et pulse à >85 %. Écran WIN = 'DÉFI RÉUSSI' + score + série +
  *   mêmes boutons que OVER (replay/menu).
+ *   ORIENTATION : le jeu se joue en PAYSAGE. Sur appareil tactile en portrait
+ *   (h > w), BladeUI.render dessine un overlay opaque « ↻ TOURNEZ VOTRE
+ *   TÉLÉPHONE » par-dessus tout ; view.portraitBlocked (fourni par main.js)
+ *   le déclenche, et main.js bloque alors tout input jeu (les strokes), pas
+ *   le déblocage audio. Sur PC (souris, pas de tactile), jamais d'overlay.
  *   Reprendre le feel de la maquette : grille perspective animée, hexagones
  *   néon + flèche blanche, anneau d'urgence (>55 % jaune, >85 % rouge),
  *   moitiés qui s'écartent, particules, traînée 2 passes (couleurs de la lame
@@ -226,9 +233,13 @@ var CONFIG = {
  * Date.now()&0xffffffff ; daily : BladeLevels.dailySeed(BladeMeta.todayStr())),
  * routage events → BladeUI.onEvents + BladeAudio.play, fin de run ('over' OU
  * 'dailyWin') → BladeMeta.recordRun. Un tap sur TITLE/OVER/WIN passe par
- * BladeUI.hitTest. Musique : startMusic() au lancement d'un run, stopMusic()
- * sur over/dailyWin/retour menu ; setMusicIntensity((wave.id-1)/5) à chaque
- * event 'wave'.
+ * BladeUI.hitTest. Musique : startMusic('menu') dès le premier geste sur
+ * TITLE (et au retour menu/over/win), startMusic('game') au lancement d'un
+ * run ; setMusicIntensity((wave.id-1)/5) à chaque event 'wave'.
+ * ORIENTATION : détecte tactile + portrait (h > w) → view.portraitBlocked =
+ * true et ignore strokes/hitTest (l'unlock audio reste actif) ; au premier
+ * geste, tente screen.orientation.lock('landscape') dans un try/catch
+ * (marche sur Android en plein écran, refusé sur iOS → l'overlay suffit).
  * ========================================================================== */
 
 if (typeof window !== 'undefined') window.CONFIG = CONFIG;

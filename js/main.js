@@ -27,6 +27,24 @@
   var currentMode = "arcade";
   var overHandled = false;
 
+  // ---------------------------------------------------------------- orientation (paysage)
+  var isTouch = ("ontouchstart" in window);
+  var portraitBlocked = false;
+  function updatePortraitBlocked() {
+    portraitBlocked = isTouch && (window.innerHeight > window.innerWidth);
+  }
+  updatePortraitBlocked();
+  window.addEventListener("resize", updatePortraitBlocked);
+  window.addEventListener("orientationchange", updatePortraitBlocked);
+  function tryLockLandscape() {
+    try {
+      var so = window.screen; // ne pas confondre avec la variable locale `screen` (état d'écran du jeu)
+      if (so && so.orientation && typeof so.orientation.lock === "function") {
+        so.orientation.lock("landscape").catch(function () {});
+      }
+    } catch (err) { /* noop — iOS refuse, l'overlay suffit */ }
+  }
+
   var menu = {
     blades: blades,
     bladeIndex: equippedIdx,
@@ -50,7 +68,7 @@
     var size = BladeUI.resize();
     engine = BladeEngine.create({ mode: mode, seed: seed, viewport: { w: size.w, h: size.h } });
     screen = "PLAY";
-    BladeAudio.startMusic();
+    BladeAudio.startMusic("game");
   }
 
   function handleRunEnd(e, nextScreen) {
@@ -61,6 +79,7 @@
     refreshMeta();
     menu.unlockedThisRun = res.unlocked || [];
     BladeAudio.stopMusic();
+    BladeAudio.startMusic("menu");
     screen = nextScreen;
   }
 
@@ -101,7 +120,9 @@
       case "arcade": BladeAudio.play("click"); startRun("arcade"); break;
       case "daily": BladeAudio.play("click"); startRun("daily"); break;
       case "replay": BladeAudio.play("click"); startRun(currentMode); break;
-      case "menu": BladeAudio.play("click"); BladeAudio.stopMusic(); refreshMeta(); screen = "TITLE"; break;
+      case "menu":
+        BladeAudio.play("click"); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
+        refreshMeta(); screen = "TITLE"; break;
       case "mute":
         BladeAudio.setMuted(!BladeAudio.muted);
         menu.muted = BladeAudio.muted;
@@ -121,9 +142,13 @@
     if (e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX - r.left, y: e.changedTouches[0].clientY - r.top };
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
+  var landscapeLockTried = false;
   function onDown(e) {
     e.preventDefault();
     BladeAudio.unlock();
+    if (isTouch && !landscapeLockTried) { landscapeLockTried = true; tryLockLandscape(); }
+    if (screen === "TITLE") BladeAudio.startMusic("menu");
+    if (portraitBlocked) return; // input jeu bloqué, le déblocage audio ci-dessus reste actif
     var p = getXY(e);
     if (screen === "PLAY") {
       slicing = true;
@@ -134,6 +159,7 @@
     }
   }
   function onMove(e) {
+    if (portraitBlocked) return;
     if (screen !== "PLAY" || !slicing) return;
     e.preventDefault();
     var p = getXY(e);
@@ -175,7 +201,7 @@
       routeEvents(engine.update(dt));
     }
 
-    var view = { screen: screen, engineState: engine ? engine.state : null, meta: meta, menu: menu, mode: currentMode };
+    var view = { screen: screen, engineState: engine ? engine.state : null, meta: meta, menu: menu, mode: currentMode, portraitBlocked: portraitBlocked };
     if (screen === "TITLE") view.debug = BladeAudio.debugInfo();
     BladeUI.render(dt, view);
 

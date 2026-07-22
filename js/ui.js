@@ -376,7 +376,6 @@ var BladeUI = (function () {
     if (sub) txt(sub, x + w / 2, y + h * 0.78, Math.round(MIN * 0.026), col, "center", false);
   }
   function drawTitleScreen(dt, view) {
-    titleT += dt;
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
     txt("BLADE", W / 2 + jit, H * 0.20, Math.round(MIN * 0.13), C.CY, "center", true);
     txt(".EXE", W / 2 - jit, H * 0.20 + MIN * 0.11, Math.round(MIN * 0.095), C.MG, "center", true);
@@ -489,12 +488,38 @@ var BladeUI = (function () {
     btnRects.WIN.menu = { x: mxB, y: y, w: bw, h: bh };
   }
 
+  // ---------------------------------------------------------------- orientation overlay
+  function drawPortraitOverlay(dt) {
+    ctx.save();
+    ctx.fillStyle = C.BG;
+    ctx.fillRect(0, 0, W, H);
+    var cx = W / 2, cy = H * 0.42;
+    var r = MIN * 0.16;
+    var spin = titleT * 1.6;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(spin);
+    ctx.shadowBlur = 22; ctx.shadowColor = C.CY; ctx.strokeStyle = C.CY; ctx.lineWidth = Math.max(3, r * 0.14);
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.arc(0, 0, r, 0.2 * TAU, 0.92 * TAU); ctx.stroke();
+    var ax = Math.cos(0.2 * TAU) * r, ay = Math.sin(0.2 * TAU) * r;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax + r * 0.22, ay - r * 0.05);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - r * 0.05, ay - r * 0.22);
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    txt("TOURNEZ VOTRE TÉLÉPHONE", cx, cy + r + MIN * 0.09, Math.round(MIN * 0.045), C.MG, "center", true);
+  }
+
   // ---------------------------------------------------------------- public API
   function render(dt, view) {
     if (!ctx) return;
     if (dt > 0.05) dt = 0.05;
     view = view || {};
     updateCosmetics(dt);
+    titleT += dt;
     drawGrid(dt);
     if (view.screen === "TITLE") {
       drawTitleScreen(dt, view);
@@ -507,6 +532,7 @@ var BladeUI = (function () {
     } else {
       drawPlay(view.engineState, view.mode);
     }
+    if (view.portraitBlocked) drawPortraitOverlay(dt);
   }
   function hitTest(x, y, screen) {
     var rects = btnRects[screen];

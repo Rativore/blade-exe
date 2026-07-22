@@ -217,6 +217,7 @@ var BladeAudio = (function () {
   })();
 
   var musicPlaying = false;
+  var musicKind = "game";   // "game" | "menu"
   var musicTimer = null;
   var musicBus = null;      // volume musique (intensité)
   var musicLowpass = null;  // filtre global (ouvre avec l'intensité)
@@ -225,18 +226,24 @@ var BladeAudio = (function () {
   var currentStep = 0;
   var nextNoteTime = 0;
 
-  function createMusicChain() {
+  function createMusicChain(kind) {
     musicBus = ctx.createGain();
-    musicBus.gain.value = 0.42 + intensity * 0.18;
     musicLowpass = ctx.createBiquadFilter();
     musicLowpass.type = "lowpass";
-    musicLowpass.frequency.value = 1200 + intensity * 9000;
-    musicLowpass.Q.value = 0.7;
     duckGain = ctx.createGain();
     duckGain.gain.value = 1;
     duckGain.connect(musicBus);
     musicBus.connect(musicLowpass);
     musicLowpass.connect(master);
+    if (kind === "menu") {
+      musicBus.gain.value = MENU_BUS_GAIN;
+      musicLowpass.frequency.value = MENU_LOWPASS_FREQ;
+      musicLowpass.Q.value = 0.6;
+    } else {
+      musicBus.gain.value = 0.42 + intensity * 0.18;
+      musicLowpass.frequency.value = 1200 + intensity * 9000;
+      musicLowpass.Q.value = 0.7;
+    }
   }
 
   function scheduleKick(t) {
@@ -318,22 +325,138 @@ var BladeAudio = (function () {
     leadPluck(freq, t, STEP16_DUR * 0.9, glitchNow);
   }
 
-  function schedulerTick() {
-    if (!ctx || !musicPlaying) return;
-    while (nextNoteTime < ctx.currentTime + SCHED_AHEAD) {
-      scheduleStep(currentStep, nextNoteTime);
-      nextNoteTime += STEP16_DUR;
-      currentStep = (currentStep + 1) % TOTAL_STEPS;
+  // ------------------------------------------------------ musique de menu
+  // Nappe synthwave calme ~90 BPM, boucle de 8 mesures : pads saw détunés
+  // (lowpass), arpège lent, sub discret. Aucune batterie agressive.
+  var MENU_BPM = 90;
+  var MENU_BEAT_DUR = 60 / MENU_BPM;
+  var MENU_STEP_DUR = MENU_BEAT_DUR;        // granularité = la noire
+  var MENU_STEPS_PER_BAR = 4;
+  var MENU_BARS_PER_LOOP = 8;
+  var MENU_TOTAL_STEPS = MENU_STEPS_PER_BAR * MENU_BARS_PER_LOOP;
+  var MENU_BUS_GAIN = 0.22;                 // < volume du jeu (0.42..0.6)
+  var MENU_LOWPASS_FREQ = 1500;
+  var MENU_ROOT = 110;                      // A2 — référence pads/sub
+  // progression i - VI - VII - i (Am - F - G - Am), 2 mesures par accord,
+  // chaque accord = [root, tierce, quinte] en demi-tons depuis MENU_ROOT
+  var MENU_CHORDS = [[0, 3, 7], [-4, 0, 3], [-2, 2, 5], [0, 3, 7]];
+  var MENU_ARP_PATTERN = [0, 1, 2, 1];      // indices dans l'accord courant
+
+  function schedulePad(tones, t, dur) {
+    if (!musicBus) return;
+    for (var i = 0; i < tones.length; i++) {
+      var freq = MENU_ROOT * Math.pow(2, tones[i] / 12);
+      var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      var g = ctx.createGain();
+      o1.type = "sawtooth"; o2.type = "sawtooth";
+      o1.detune.setValueAtTime(-7, t); o2.detune.setValueAtTime(7, t);
+      o1.frequency.setValueAtTime(freq, t); o2.frequency.setValueAtTime(freq, t);
+      var peak = 0.06;
+      var atk = Math.min(1.2, dur * 0.35), rel = Math.min(1.0, dur * 0.3);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + atk);
+      g.gain.setValueAtTime(peak, t + dur - rel);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o1.connect(g); o2.connect(g); g.connect(musicBus);
+      o1.start(t); o2.start(t);
+      o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
     }
   }
 
-  function startMusic() {
+  function scheduleMenuArp(tones, step, t) {
+    if (!musicBus) return;
+    var idx = MENU_ARP_PATTERN[step % MENU_ARP_PATTERN.length];
+    var semis = tones[idx % tones.length] + 12; // une octave au-dessus des pads
+    var freq = MENU_ROOT * Math.pow(2, semis / 12);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(freq, t);
+    var peak = 0.09;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + MENU_STEP_DUR * 0.9);
+    o.connect(g); g.connect(musicBus);
+    o.start(t); o.stop(t + MENU_STEP_DUR + 0.05);
+  }
+
+  function scheduleMenuSub(tones, t) {
+    if (!duckGain) return;
+    var freq = (MENU_ROOT / 2) * Math.pow(2, tones[0] / 12);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, t);
+    var peak = 0.14;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + MENU_BEAT_DUR * 3.2);
+    o.connect(g); g.connect(duckGain);
+    o.start(t); o.stop(t + MENU_BEAT_DUR * 3.3);
+  }
+
+  function scheduleMenuStep(step, t) {
+    var posInBar = step % MENU_STEPS_PER_BAR;
+    var bar = Math.floor(step / MENU_STEPS_PER_BAR) % MENU_BARS_PER_LOOP;
+    var chordIdx = Math.floor(bar / 2) % MENU_CHORDS.length;
+    var tones = MENU_CHORDS[chordIdx];
+    if (posInBar === 0) {
+      if (bar % 2 === 0) schedulePad(tones, t, MENU_BEAT_DUR * MENU_STEPS_PER_BAR * 2 - 0.05);
+      scheduleMenuSub(tones, t);
+    }
+    scheduleMenuArp(tones, step, t);
+  }
+
+  function schedulerTick() {
+    if (!ctx || !musicPlaying) return;
+    var stepDur = (musicKind === "menu") ? MENU_STEP_DUR : STEP16_DUR;
+    var totalSteps = (musicKind === "menu") ? MENU_TOTAL_STEPS : TOTAL_STEPS;
+    while (nextNoteTime < ctx.currentTime + SCHED_AHEAD) {
+      if (musicKind === "menu") scheduleMenuStep(currentStep, nextNoteTime);
+      else scheduleStep(currentStep, nextNoteTime);
+      nextNoteTime += stepDur;
+      currentStep = (currentStep + 1) % totalSteps;
+    }
+  }
+
+  function teardownMusicChain(immediate) {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    musicPlaying = false;
+    if (ctx && musicBus) {
+      var bus = musicBus, lp = musicLowpass, dg = duckGain;
+      if (immediate) {
+        try { bus.disconnect(); } catch (err) { /* noop */ }
+        try { if (lp) lp.disconnect(); } catch (err) { /* noop */ }
+        try { if (dg) dg.disconnect(); } catch (err) { /* noop */ }
+      } else {
+        try {
+          var t = now();
+          bus.gain.cancelScheduledValues(t);
+          bus.gain.setValueAtTime(bus.gain.value, t);
+          bus.gain.linearRampToValueAtTime(0.0001, t + 0.08);
+        } catch (err) { /* noop */ }
+        setTimeout(function () {
+          try { bus.disconnect(); } catch (err) { /* noop */ }
+          try { if (lp) lp.disconnect(); } catch (err) { /* noop */ }
+          try { if (dg) dg.disconnect(); } catch (err) { /* noop */ }
+        }, 140);
+      }
+    }
+    musicBus = null; musicLowpass = null; duckGain = null;
+  }
+
+  // kind : 'menu' (nappe calme écran titre) | 'game' (défaut si omis, boucle
+  // hyperpop inchangée)
+  function startMusic(kind) {
+    kind = (kind === "menu") ? "menu" : "game";
     if (!hasAudio) return;
     if (!ctx) init();
     if (!ctx) return;
-    if (musicPlaying) return;
+    if (musicPlaying) {
+      if (musicKind === kind) return;
+      teardownMusicChain(true); // changement de kind : bascule immédiate
+    }
     resume();
-    createMusicChain();
+    musicKind = kind;
+    createMusicChain(kind);
     currentStep = 0;
     nextNoteTime = ctx.currentTime + 0.05;
     musicPlaying = true;
@@ -342,27 +465,14 @@ var BladeAudio = (function () {
   }
 
   function stopMusic() {
-    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
-    musicPlaying = false;
-    if (ctx && musicBus) {
-      var bus = musicBus, lp = musicLowpass, dg = duckGain;
-      try {
-        var t = now();
-        bus.gain.cancelScheduledValues(t);
-        bus.gain.setValueAtTime(bus.gain.value, t);
-        bus.gain.linearRampToValueAtTime(0.0001, t + 0.08);
-      } catch (err) { /* noop */ }
-      setTimeout(function () {
-        try { bus.disconnect(); } catch (err) { /* noop */ }
-        try { if (lp) lp.disconnect(); } catch (err) { /* noop */ }
-        try { if (dg) dg.disconnect(); } catch (err) { /* noop */ }
-      }, 140);
-    }
-    musicBus = null; musicLowpass = null; duckGain = null;
+    teardownMusicChain(false);
   }
 
+  // Ne pilote que la boucle 'game' (tempo ressenti + lowpass) ; sans effet
+  // pendant la nappe 'menu'.
   function setMusicIntensity(i) {
     intensity = Math.max(0, Math.min(1, i));
+    if (musicKind !== "game") return;
     if (!ctx) return;
     var t = now();
     if (musicLowpass) {
