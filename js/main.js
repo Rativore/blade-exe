@@ -61,7 +61,10 @@
     meta = BladeMeta.get();
     blades = BladeMeta.getBlades();
     menu.blades = blades;
+    // défi du jour déjà réussi aujourd'hui → bouton grisé jusqu'à demain
+    menu.dailyDone = !!(meta.daily && meta.daily.lastDate === BladeMeta.todayStr());
   }
+  refreshMeta(); // état initial (dailyDone au lancement)
 
   // ---------------------------------------------------------------- run flow
   function startRun(mode) {
@@ -204,7 +207,9 @@
     }
     switch (action) {
       case "arcade": BladeAudio.play("click"); startRun("arcade"); break;
-      case "daily": BladeAudio.play("click"); startRun("daily"); break;
+      case "daily":
+        if (menu.dailyDone) { BladeAudio.play("wrong"); break; } // déjà réussi aujourd'hui
+        BladeAudio.play("click"); startRun("daily"); break;
       case "replay":
         BladeAudio.play("click");
         if (screen === "LEVELEND") startLevel(menu.worldIndex, menu.levelIndex);

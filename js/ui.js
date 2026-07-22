@@ -482,7 +482,13 @@ var BladeUI = (function () {
       var levelsY = shopY + shopBh + levelsGap;
 
       drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
-      drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      if (menu.dailyDone) {
+        ctx.save(); ctx.globalAlpha = 0.45;
+        drawMenuButton(bx, dailyY, bw, bh, "DÉFI RÉUSSI ✓", C.MG, "REVENEZ DEMAIN · SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+        ctx.restore();
+      } else {
+        drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      }
       drawMenuButton(bx, shopY, bw, shopBh, "BOUTIQUE", C.GOLD, null);
       drawMenuButton(bx, levelsY, bw, levelsBh, "NIVEAUX", C.CY, null);
 
@@ -520,7 +526,13 @@ var BladeUI = (function () {
       var bx2 = W / 2 - bw2 / 2;
 
       drawMenuButton(bx2, arcadeY2, bw2, bh2, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
-      drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      if (menu.dailyDone) {
+        ctx.save(); ctx.globalAlpha = 0.45;
+        drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI RÉUSSI ✓", C.MG, "REVENEZ DEMAIN");
+        ctx.restore();
+      } else {
+        drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      }
       drawMenuButton(bx2, shopY2, bw2, shopBh2, "BOUTIQUE", C.GOLD, null);
       drawMenuButton(bx2, levelsY2, bw2, levelsBh2, "NIVEAUX", C.CY, null);
 
