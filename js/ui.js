@@ -449,6 +449,7 @@ var BladeUI = (function () {
     if (sub) txt(sub, x + w / 2, y + h * 0.78, Math.round(MIN * 0.026), col, "center", false);
   }
   function drawTitleScreen(dt, view) {
+    delete btnRects.TITLE.bladePrev; // flèche ◀ retirée — purge la zone cliquable résiduelle
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
     var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
     var meta = view.meta || { best: 0, daily: { streak: 0 }, shards: 0 };
@@ -466,8 +467,6 @@ var BladeUI = (function () {
       ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
       txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", colX, H * 0.60, Math.round(MIN * 0.034), "#cfefff", "center", false);
       ctx.restore();
-
-      txt("VERSION " + verMid, colX, H * 0.70, Math.round(MIN * 0.05), C.GOLD, "center", true);
 
       // ---- right column : big buttons + blade selector ----
       var bw = W * 0.40, bh = H * 0.16;
@@ -498,11 +497,9 @@ var BladeUI = (function () {
       var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
 
-      var prevX = colRX - bw * 0.58, nextX = colRX + bw * 0.58;
+      var nextX = colRX + bw * 0.58;
       var arrowHalf = MIN * 0.06;
-      txt("◀", prevX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
       txt("▶", nextX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
-      btnRects.TITLE.bladePrev = { x: prevX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
       btnRects.TITLE.bladeNext = { x: nextX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
     } else {
       // ---- portrait (fenêtre PC) : disposition centrée d'origine ----
@@ -512,8 +509,6 @@ var BladeUI = (function () {
       ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
       txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", W / 2, H * 0.38, Math.round(MIN * 0.030), "#cfefff", "center", false);
       ctx.restore();
-
-      txt("VERSION " + verMid, W / 2, H * 0.425, Math.round(MIN * 0.042), C.GOLD, "center", true);
 
       var bw2 = MIN * 0.56, bh2 = MIN * 0.105;
       var arcadeY2 = H * 0.44;
@@ -540,11 +535,9 @@ var BladeUI = (function () {
       var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
 
-      var prevX2 = W / 2 - bw2 * 0.42, nextX2 = W / 2 + bw2 * 0.42;
+      var nextX2 = W / 2 + bw2 * 0.42;
       var arrowHalf2 = MIN * 0.05;
-      txt("◀", prevX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
       txt("▶", nextX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
-      btnRects.TITLE.bladePrev = { x: prevX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
       btnRects.TITLE.bladeNext = { x: nextX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
     }
 
@@ -558,8 +551,7 @@ var BladeUI = (function () {
     txt(menu.muted ? "SON : OFF" : "SON : ON", mx + mw / 2, my + mh / 2, 14, "#eafcff", "center", false);
     btnRects.TITLE.mute = { x: mx, y: my, w: mw, h: mh };
 
-    txt("TAP / CLIC POUR CHOISIR  ·  v" + verMid, W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
-    if (view.debug) txt(view.debug, W / 2, H * 0.905, 12, "#4a8a95", "center", false);
+    txt("v" + verMid, 16, H - 16, 13, "#4a6a75", "left", false);
   }
 
   // ---------------------------------------------------------------- end-screen buttons (OVER/WIN)
