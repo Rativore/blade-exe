@@ -424,6 +424,7 @@ var BladeUI = (function () {
 
     var ver = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
     txt("TAP / CLIC POUR CHOISIR  ·  v" + ver, W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
+    if (view.debug) txt(view.debug, W / 2, H * 0.905, 12, "#4a8a95", "center", false);
   }
 
   // ---------------------------------------------------------------- over screen

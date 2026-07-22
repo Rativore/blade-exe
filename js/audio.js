@@ -39,9 +39,31 @@ var BladeAudio = (function () {
   }
 
   function resume() {
-    if (ctx && ctx.state === "suspended" && typeof ctx.resume === "function") {
+    // iOS peut mettre le contexte en "suspended" OU "interrupted"
+    if (ctx && ctx.state !== "running" && typeof ctx.resume === "function") {
       ctx.resume();
     }
+  }
+
+  // Déblocage historique iOS : jouer un échantillon muet DANS le geste
+  var unlocked = false;
+  function playSilentBuffer() {
+    if (!ctx || unlocked) return;
+    try {
+      var buf = ctx.createBuffer(1, 1, 22050);
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      unlocked = true;
+    } catch (err) {}
+  }
+
+  function debugInfo() {
+    if (!hasAudio) return "audio: API WebAudio absente";
+    if (!ctx) return "audio: en attente du premier toucher";
+    return "audio: " + ctx.state + " · " + ctx.sampleRate + "Hz" +
+      (muted ? " · muet" : "") + (unlocked ? " · déverrouillé" : "");
   }
 
   function now() { return ctx ? ctx.currentTime : 0; }
@@ -359,11 +381,13 @@ var BladeAudio = (function () {
   function unlock() {
     init();
     resume();
+    playSilentBuffer();
   }
 
   var api = {
     init: init,
     unlock: unlock,
+    debugInfo: debugInfo,
     play: play,
     setMuted: setMuted,
     startMusic: startMusic,
