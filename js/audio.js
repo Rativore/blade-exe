@@ -19,6 +19,13 @@ var BladeAudio = (function () {
   function init() {
     if (!hasAudio || ctx) return;
     var AC = window.AudioContext || window.webkitAudioContext;
+    // iOS : router l'audio en session « playback » pour que le commutateur
+    // silencieux physique ne coupe pas le WebAudio (iOS 17+, sans effet ailleurs)
+    try {
+      if (typeof navigator !== "undefined" && navigator.audioSession) {
+        navigator.audioSession.type = "playback";
+      }
+    } catch (err) {}
     try {
       ctx = new AC();
       master = ctx.createGain();

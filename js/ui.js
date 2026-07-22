@@ -422,8 +422,8 @@ var BladeUI = (function () {
     txt(menu.muted ? "SON : OFF" : "SON : ON", mx + mw / 2, my + mh / 2, 14, "#eafcff", "center", false);
     btnRects.TITLE.mute = { x: mx, y: my, w: mw, h: mh };
 
-    txt("TAP / CLIC POUR CHOISIR", W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
-    txt("v" + (typeof CONFIG !== "undefined" && CONFIG.VERSION ? CONFIG.VERSION : "?"), W - 8, H - 10, 11, "#4a6a75", "right", false);
+    var ver = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
+    txt("TAP / CLIC POUR CHOISIR  ·  v" + ver, W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
   }
 
   // ---------------------------------------------------------------- over screen
