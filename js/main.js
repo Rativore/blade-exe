@@ -152,6 +152,11 @@
     if (portraitBlocked) return; // input jeu bloqué, le déblocage audio ci-dessus reste actif
     var p = getXY(e);
     if (screen === "PLAY") {
+      if (BladeUI.hitTest(p.x, p.y, "PLAY") === "home") {
+        BladeAudio.play("click");
+        handleRunEnd({ score: engine.state.score, maxCombo: engine.state.maxCombo }, "TITLE");
+        return;
+      }
       slicing = true;
       routeEvents(engine.strokeStart(p.x, p.y));
       BladeUI.strokePoint(p.x, p.y);

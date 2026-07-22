@@ -28,7 +28,7 @@ var BladeUI = (function () {
   var glitch = 0, redFlash = 0;
   var gridT = 0, titleT = 0;
 
-  var btnRects = { TITLE: {}, OVER: {}, WIN: {} };
+  var btnRects = { TITLE: {}, OVER: {}, WIN: {}, PLAY: {} };
 
   // ---------------------------------------------------------------- helpers
   function hexToRgba(hex, a) {
@@ -328,6 +328,22 @@ var BladeUI = (function () {
     }
   }
 
+  // ---------------------------------------------------------------- home button (PLAY, discret, sous le score)
+  function drawHomeButton() {
+    var bx = 14, by = 40, bw = 24, bh = 24;
+    var cx = bx + bw / 2, cy = by + bh / 2, r = bw / 2;
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = C.CY; ctx.lineWidth = 2; ctx.shadowBlur = 8; ctx.shadowColor = C.CY;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    ctx.font = '700 14px "Segoe UI",Arial,sans-serif';
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = C.CY;
+    ctx.fillText("⌂", cx, cy + 1);
+    ctx.restore();
+    btnRects.PLAY.home = { x: bx, y: by, w: bw, h: bh };
+  }
+
   // ---------------------------------------------------------------- daily progress bar
   function drawDailyBar(state) {
     if (typeof CONFIG === "undefined" || !CONFIG.DAILY) return;
@@ -594,6 +610,7 @@ var BladeUI = (function () {
       drawWinScreen(view);
     } else {
       drawPlay(view.engineState, view.mode);
+      drawHomeButton();
     }
     if (view.portraitBlocked) drawPortraitOverlay(dt);
   }

@@ -18,7 +18,7 @@
 
 var CONFIG = {
 
-  VERSION: '1.8',             // affichée à l'écran titre — à incrémenter
+  VERSION: '1.9',             // affichée à l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -50,7 +50,8 @@ var CONFIG = {
     START_SIZE: 0.028,        // rayon initial
     MAX_SIZE: 0.155,          // rayon fatal (objet « atteint » le joueur)
     SPAWN_MARGIN_TOP: 70,     // px réservés au HUD
-    SPAWN_MARGIN_BOTTOM: 20,  // px
+    SPAWN_MARGIN_BOTTOM: 48,  // px — large : éloigne l'action du bord bas (geste
+                              // système iOS « glisser depuis le bas » = sortie d'app)
     SPIN_SPEED: 0.6,          // rad/s rotation cosmétique de l'hexagone
   },
 
@@ -225,7 +226,10 @@ var CONFIG = {
  * sélecteur de lame + bouton son ; OVER = SYSTÈME COMPROMIS, score, record,
  * lames débloquées ce run, REJOUER + MENU. Boutons = zones cliquables que
  * BladeUI.hitTest(x,y,screen) → 'arcade'|'daily'|'replay'|'menu'|'mute'|
- * 'bladePrev'|'bladeNext'|null (main.js route les taps).
+ * 'bladePrev'|'bladeNext'|'home'|null (main.js route les taps).
+ * PLAY : bouton ⌂ ACCUEIL discret en haut à gauche, SOUS le score (dans la
+ * zone HUD protégée par SPAWN_MARGIN_TOP) → btnRects.PLAY.home ; permet de
+ * quitter la partie en cours pour revenir au menu.
  *
  * ------------------------------------------------------------------ main.js
  * Boucle rAF (dt cap 0.05 s), resize, input souris+tactile (preventDefault,
@@ -240,6 +244,9 @@ var CONFIG = {
  * true et ignore strokes/hitTest (l'unlock audio reste actif) ; au premier
  * geste, tente screen.orientation.lock('landscape') dans un try/catch
  * (marche sur Android en plein écran, refusé sur iOS → l'overlay suffit).
+ * ACCUEIL EN JEU : en PLAY, onDown teste d'abord hitTest(x,y,'PLAY') ;
+ * si 'home' → terminer le run comme une fin de partie (recordRun avec le
+ * score courant, musique menu, écran TITLE), sinon stroke normal.
  * ========================================================================== */
 
 if (typeof window !== 'undefined') window.CONFIG = CONFIG;

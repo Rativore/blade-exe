@@ -1,0 +1,15 @@
+{
+  "name": "BLADE.EXE",
+  "short_name": "BLADE.EXE",
+  "description": "Sabre réflexe cyberpunk — tranchez les fragments dans le bon sens.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05020a",
+  "theme_color": "#05020a",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

@@ -2,21 +2,30 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>BLADE.EXE</title>
-<link rel="stylesheet" href="css/style.css?v=1.8">
+<!-- Mode web-app plein écran (ajout à l'écran d'accueil) : masque la barre
+     Safari → moins de sorties accidentelles par les gestes de bord iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BLADE.EXE">
+<meta name="theme-color" content="#05020a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css?v=1.9">
 </head>
 <body>
 <canvas id="game"></canvas>
 <!-- Ordre de chargement : contrat → données → logique → présentation → boot.
      Le ?v=X.Y force les navigateurs mobiles à recharger les fichiers à chaque
      publication — le tenir synchronisé avec CONFIG.VERSION (skill publier-jeu). -->
-<script src="js/config.js?v=1.8"></script>
-<script src="js/levels.js?v=1.8"></script>
-<script src="js/meta.js?v=1.8"></script>
-<script src="js/engine.js?v=1.8"></script>
-<script src="js/audio.js?v=1.8"></script>
-<script src="js/ui.js?v=1.8"></script>
-<script src="js/main.js?v=1.8"></script>
+<script src="js/config.js?v=1.9"></script>
+<script src="js/levels.js?v=1.9"></script>
+<script src="js/meta.js?v=1.9"></script>
+<script src="js/engine.js?v=1.9"></script>
+<script src="js/audio.js?v=1.9"></script>
+<script src="js/ui.js?v=1.9"></script>
+<script src="js/main.js?v=1.9"></script>
 </body>
 </html>
