@@ -81,6 +81,15 @@ var BladeUI = (function () {
     }
     return { text: "", color: C.TEXT, action: null, label: null, disabled: true };
   }
+  // status/contextual action for a shop theme entry ({...CONFIG.THEMES[i], unlocked, equipped})
+  function themeStatus(t, shards) {
+    if (!t) return { text: "", color: C.TEXT, action: null, label: null, disabled: true };
+    if (t.equipped) return { text: "ÉQUIPÉ", color: C.GOLD, action: null, label: null, disabled: true };
+    if (t.unlocked) return { text: "POSSÉDÉ", color: C.CY, action: "equip", label: "ÉQUIPER", disabled: false };
+    var price = t.price || 0;
+    var afford = shards >= price;
+    return { text: price + " " + currencySymbol(), color: C.GOLD, action: "buy", label: "ACHETER", disabled: !afford };
+  }
 
   // ---------------------------------------------------------------- init/resize
   function init(canvas) {
@@ -329,6 +338,41 @@ var BladeUI = (function () {
       else { ctx.strokeStyle = b.inner; ctx.lineWidth = Math.max(3, r * 0.07); ctx.shadowBlur = 14; ctx.shadowColor = b.glow; }
       ctx.stroke();
     }
+    ctx.restore();
+  }
+  // ---------------------------------------------------------------- shop theme preview (vignette)
+  function themeColorsFor(t) {
+    var th = t && t.theme;
+    if (th) return { BG: th.BG, GRID1: th.GRID1, GRID2: th.GRID2, HUE_A: th.HUE_A, HUE_B: th.HUE_B };
+    return { BG: baseC.BG, GRID1: baseC.CY, GRID2: baseC.MG, HUE_A: baseC.CY, HUE_B: baseC.MG };
+  }
+  function drawMiniHex(cx, cy, r, col) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.shadowBlur = 10; ctx.shadowColor = col; ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var a = 0; a < 6; a++) {
+      var an = a / 6 * TAU, px = Math.cos(an) * r, py = Math.sin(an) * r;
+      if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  function drawThemePreview(cx, cy, w, h, t) {
+    var tc = themeColorsFor(t);
+    var x = cx - w / 2, y = cy - h / 2;
+    ctx.save();
+    ctx.fillStyle = tc.BG; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+    var lines = 4;
+    for (var i = 1; i <= lines; i++) {
+      var ly = y + (h * i) / (lines + 1);
+      ctx.strokeStyle = hexToRgba(i % 2 ? tc.GRID1 : tc.GRID2, 0.5); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + w * 0.08, ly); ctx.lineTo(x + w * 0.92, ly); ctx.stroke();
+    }
+    drawMiniHex(cx - w * 0.18, cy + h * 0.18, Math.min(w, h) * 0.14, tc.HUE_A);
+    drawMiniHex(cx + w * 0.18, cy + h * 0.18, Math.min(w, h) * 0.14, tc.HUE_B);
     ctx.restore();
   }
   function drawParticles() {
@@ -703,26 +747,38 @@ var BladeUI = (function () {
     if (landscape) drawEndButtonsLandscape("WIN", x2Btn, true); else drawEndButtonsPortrait("WIN", x2Btn, true);
   }
 
-  // ---------------------------------------------------------------- shop screen
-  function drawShopScreen(view) {
-    var meta = view.meta || { shards: 0 };
-    var menu = view.menu || { blades: [], shopIndex: 0 };
+  // ---------------------------------------------------------------- shop screen (onglets SABRES / THÈMES)
+  function drawTabButton(x, y, w, h, label, active) {
+    ctx.save();
+    if (active) { ctx.globalAlpha = 0.18; ctx.fillStyle = C.GOLD; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = active ? C.GOLD : "rgba(255,255,255,0.35)";
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.shadowBlur = active ? 14 : 0; ctx.shadowColor = C.GOLD;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+    txt(label, x + w / 2, y + h / 2, Math.round(MIN * (active ? 0.032 : 0.028)), active ? C.GOLD : "#cfefff", "center", active);
+  }
+  function drawShopTabs(tab, landscape) {
+    var tw = landscape ? W * 0.16 : MIN * 0.32;
+    var th = landscape ? H * 0.065 : MIN * 0.075;
+    var gap = landscape ? W * 0.02 : MIN * 0.03;
+    var totalW = tw * 2 + gap;
+    var tx0 = W / 2 - totalW / 2, ty = H * 0.19;
+    var bladesX = tx0, themesX = tx0 + tw + gap;
+    drawTabButton(bladesX, ty, tw, th, "SABRES", tab === "blades");
+    drawTabButton(themesX, ty, tw, th, "THÈMES", tab === "themes");
+    btnRects.SHOP.tabBlades = { x: bladesX, y: ty, w: tw, h: th };
+    btnRects.SHOP.tabThemes = { x: themesX, y: ty, w: tw, h: th };
+  }
+  function drawShopBladesTab(menu, shards, landscape) {
     var blades = menu.blades || [];
     var idx = menu.shopIndex || 0;
     if (idx < 0 || idx >= blades.length) idx = 0;
     var b = blades[idx] || null;
-    var shards = (typeof meta.shards === "number") ? meta.shards : 0;
-    var landscape = W > H;
-
-    btnRects.SHOP = {};
-
-    txt("BOUTIQUE", W / 2, H * 0.10, Math.round(MIN * 0.06), C.GOLD, "center", true);
-    txt(shards + " " + currencySymbol(), W / 2, H * 0.17, Math.round(MIN * 0.036), C.CY, "center", true);
-
     var st = bladeStatus(b, shards);
 
     if (landscape) {
-      var previewCx = W * 0.27, previewCy = H * 0.52, previewR = MIN * 0.15;
+      var previewCx = W * 0.27, previewCy = H * 0.54, previewR = MIN * 0.15;
       if (b) drawBladePreview(previewCx, previewCy, previewR, b);
       txt(b ? b.name : "—", previewCx, previewCy + previewR * 1.1 + MIN * 0.05, Math.round(MIN * 0.05), b ? b.glow : C.TEXT, "center", true);
 
@@ -735,11 +791,11 @@ var BladeUI = (function () {
       btnRects.SHOP.shopNext = { x: nextX - arrowHalf, y: arrowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
 
       var infoCX = W * 0.72;
-      txt(st.text, infoCX, H * 0.38, Math.round(MIN * 0.045), st.color, "center", true);
+      txt(st.text, infoCX, H * 0.40, Math.round(MIN * 0.045), st.color, "center", true);
 
       if (st.label) {
         var bw = W * 0.30, bh = H * 0.16;
-        var bx = infoCX - bw / 2, by = H * 0.48;
+        var bx = infoCX - bw / 2, by = H * 0.50;
         var col = st.disabled ? "#555" : st.color;
         ctx.save();
         ctx.globalAlpha = st.disabled ? 0.5 : 1;
@@ -747,13 +803,8 @@ var BladeUI = (function () {
         ctx.restore();
         if (!st.disabled) btnRects.SHOP[st.action] = { x: bx, y: by, w: bw, h: bh };
       }
-
-      var backW = W * 0.24, backH = H * 0.12;
-      var backX = infoCX - backW / 2, backY = H * 0.72;
-      drawMenuButton(backX, backY, backW, backH, "RETOUR", C.MG, null);
-      btnRects.SHOP.back = { x: backX, y: backY, w: backW, h: backH };
     } else {
-      var pCx = W / 2, pCy = H * 0.30, pR = MIN * 0.14;
+      var pCx = W / 2, pCy = H * 0.34, pR = MIN * 0.14;
       if (b) drawBladePreview(pCx, pCy, pR, b);
       txt(b ? b.name : "—", pCx, pCy + pR * 1.15 + MIN * 0.04, Math.round(MIN * 0.045), b ? b.glow : C.TEXT, "center", true);
 
@@ -765,11 +816,11 @@ var BladeUI = (function () {
       btnRects.SHOP.shopPrev = { x: pPrevX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
       btnRects.SHOP.shopNext = { x: pNextX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
 
-      txt(st.text, pCx, H * 0.56, Math.round(MIN * 0.04), st.color, "center", true);
+      txt(st.text, pCx, H * 0.58, Math.round(MIN * 0.04), st.color, "center", true);
 
       if (st.label) {
         var pbw = MIN * 0.5, pbh = MIN * 0.11;
-        var pbx = pCx - pbw / 2, pby = H * 0.62;
+        var pbx = pCx - pbw / 2, pby = H * 0.64;
         var pcol = st.disabled ? "#555" : st.color;
         ctx.save();
         ctx.globalAlpha = st.disabled ? 0.5 : 1;
@@ -777,12 +828,90 @@ var BladeUI = (function () {
         ctx.restore();
         if (!st.disabled) btnRects.SHOP[st.action] = { x: pbx, y: pby, w: pbw, h: pbh };
       }
-
-      var pBackW = MIN * 0.4, pBackH = MIN * 0.09;
-      var pBackX = pCx - pBackW / 2, pBackY = H * 0.80;
-      drawMenuButton(pBackX, pBackY, pBackW, pBackH, "RETOUR", C.MG, null);
-      btnRects.SHOP.back = { x: pBackX, y: pBackY, w: pBackW, h: pBackH };
     }
+  }
+  function drawShopThemesTab(menu, shards, landscape) {
+    var themes = menu.themes || [];
+    var idx = menu.shopThemeIndex || 0;
+    if (idx < 0 || idx >= themes.length) idx = 0;
+    var t = themes[idx] || null;
+    var st = themeStatus(t, shards);
+
+    if (landscape) {
+      var pcx = W * 0.27, pcy = H * 0.54, pw = MIN * 0.30, ph = MIN * 0.20;
+      if (t) drawThemePreview(pcx, pcy, pw, ph, t);
+      txt(t ? t.name : "—", pcx, pcy + ph / 2 + MIN * 0.06, Math.round(MIN * 0.05), t ? st.color : C.TEXT, "center", true);
+
+      var arrowY = pcy;
+      var arrowHalf = MIN * 0.05;
+      var prevX = pcx - pw / 2 - MIN * 0.09, nextX = pcx + pw / 2 + MIN * 0.09;
+      txt("◀", prevX, arrowY, Math.round(MIN * 0.055), "#eafcff", "center", true);
+      txt("▶", nextX, arrowY, Math.round(MIN * 0.055), "#eafcff", "center", true);
+      btnRects.SHOP.shopPrev = { x: prevX - arrowHalf, y: arrowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+      btnRects.SHOP.shopNext = { x: nextX - arrowHalf, y: arrowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+
+      var infoCX = W * 0.72;
+      txt(st.text, infoCX, H * 0.40, Math.round(MIN * 0.045), st.color, "center", true);
+
+      if (st.label) {
+        var bw = W * 0.30, bh = H * 0.16;
+        var bx = infoCX - bw / 2, by = H * 0.50;
+        var col = st.disabled ? "#555" : st.color;
+        ctx.save();
+        ctx.globalAlpha = st.disabled ? 0.5 : 1;
+        drawMenuButton(bx, by, bw, bh, st.label, col, null);
+        ctx.restore();
+        if (!st.disabled) btnRects.SHOP[st.action] = { x: bx, y: by, w: bw, h: bh };
+      }
+    } else {
+      var pCx = W / 2, pCy = H * 0.34, pW = MIN * 0.5, pH = MIN * 0.30;
+      if (t) drawThemePreview(pCx, pCy, pW, pH, t);
+      txt(t ? t.name : "—", pCx, pCy + pH / 2 + MIN * 0.05, Math.round(MIN * 0.045), t ? st.color : C.TEXT, "center", true);
+
+      var aY = pCy;
+      var aHalf = MIN * 0.045;
+      var pPrevX = pCx - pW / 2 - MIN * 0.10, pNextX = pCx + pW / 2 + MIN * 0.10;
+      txt("◀", pPrevX, aY, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      txt("▶", pNextX, aY, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      btnRects.SHOP.shopPrev = { x: pPrevX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
+      btnRects.SHOP.shopNext = { x: pNextX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
+
+      txt(st.text, pCx, H * 0.58, Math.round(MIN * 0.04), st.color, "center", true);
+
+      if (st.label) {
+        var pbw = MIN * 0.5, pbh = MIN * 0.11;
+        var pbx = pCx - pbw / 2, pby = H * 0.64;
+        var pcol = st.disabled ? "#555" : st.color;
+        ctx.save();
+        ctx.globalAlpha = st.disabled ? 0.5 : 1;
+        drawMenuButton(pbx, pby, pbw, pbh, st.label, pcol, null);
+        ctx.restore();
+        if (!st.disabled) btnRects.SHOP[st.action] = { x: pbx, y: pby, w: pbw, h: pbh };
+      }
+    }
+  }
+  function drawShopScreen(view) {
+    var meta = view.meta || { shards: 0 };
+    var menu = view.menu || { blades: [], shopIndex: 0, themes: [], shopThemeIndex: 0, shopTab: "blades" };
+    var tab = menu.shopTab || "blades";
+    var shards = (typeof meta.shards === "number") ? meta.shards : 0;
+    var landscape = W > H;
+
+    btnRects.SHOP = {};
+
+    txt("BOUTIQUE", W / 2, H * 0.08, Math.round(MIN * 0.055), C.GOLD, "center", true);
+    txt(shards + " " + currencySymbol(), W / 2, H * 0.145, Math.round(MIN * 0.032), C.CY, "center", true);
+
+    drawShopTabs(tab, landscape);
+    if (tab === "themes") drawShopThemesTab(menu, shards, landscape);
+    else drawShopBladesTab(menu, shards, landscape);
+
+    var backW = landscape ? W * 0.24 : MIN * 0.4;
+    var backH = landscape ? H * 0.12 : MIN * 0.09;
+    var backX = landscape ? W * 0.72 - backW / 2 : W / 2 - backW / 2;
+    var backY = landscape ? H * 0.74 : H * 0.82;
+    drawMenuButton(backX, backY, backW, backH, "RETOUR", C.MG, null);
+    btnRects.SHOP.back = { x: backX, y: backY, w: backW, h: backH };
   }
 
   // ---------------------------------------------------------------- worlds screen

@@ -37,6 +37,7 @@ var BladeMeta = (function () {
       daily: { lastDate: null, streak: 0, scores: {} },
       levelStars: {},
       gamesPlayed: 0,
+      themes: { unlocked: ['grid'], equipped: 'grid' },
     };
   }
 
@@ -68,6 +69,12 @@ var BladeMeta = (function () {
         save.levelStars = (parsed.levelStars && typeof parsed.levelStars === 'object') ? parsed.levelStars : save.levelStars;
         // migration : anciennes sauvegardes sans gamesPlayed -> 0 (défaut déjà posé)
         save.gamesPlayed = typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : save.gamesPlayed;
+        // migration : anciennes sauvegardes sans themes -> unlocked:['grid'], equipped:'grid'
+        // (défauts déjà posés par defaults())
+        if (parsed.themes) {
+          save.themes.unlocked = Array.isArray(parsed.themes.unlocked) ? parsed.themes.unlocked : save.themes.unlocked;
+          save.themes.equipped = parsed.themes.equipped || save.themes.equipped;
+        }
       } catch (e) {
         save = defaults();
       }
@@ -264,6 +271,48 @@ var BladeMeta = (function () {
     return true;
   }
 
+  // BladeMeta.buyTheme(id) -> { ok, shards } — refus si id inconnu, price 0
+  // (thème 'grid', gratuit d'office), déjà possédé, ou shards < price ;
+  // sinon débite, ajoute à unlocked, persiste.
+  function buyTheme(id) {
+    var s = get();
+    var theme = null;
+    for (var i = 0; i < CONFIG.THEMES.length; i++) {
+      if (CONFIG.THEMES[i].id === id) { theme = CONFIG.THEMES[i]; break; }
+    }
+    // refus : thème inconnu ou price 0 (le thème gratuit par défaut ne s'achète pas)
+    if (!theme || theme.price === 0) return { ok: false, shards: s.shards };
+    // refus : déjà possédé
+    if (s.themes.unlocked.indexOf(id) !== -1) return { ok: false, shards: s.shards };
+    // refus : solde insuffisant
+    if (s.shards < theme.price) return { ok: false, shards: s.shards };
+
+    s.shards -= theme.price;
+    s.themes.unlocked.push(id);
+    persist();
+    return { ok: true, shards: s.shards };
+  }
+
+  // BladeMeta.getThemes() -> [{...CONFIG.THEMES[i], unlocked, equipped}]
+  function getThemes() {
+    var s = get();
+    return CONFIG.THEMES.map(function (t) {
+      return Object.assign({}, t, {
+        unlocked: s.themes.unlocked.indexOf(t.id) !== -1,
+        equipped: s.themes.equipped === t.id,
+      });
+    });
+  }
+
+  // BladeMeta.equipTheme(id) -> bool (refus si non possédé)
+  function equipTheme(id) {
+    var s = get();
+    if (s.themes.unlocked.indexOf(id) === -1) return false;
+    s.themes.equipped = id;
+    persist();
+    return true;
+  }
+
   // BladeMeta.addShards(n) -> shards — crédite n (>0) éclats et persiste
   // (récompenses pub : ×2 défi, +bonus boutique plus tard).
   function addShards(n) {
@@ -286,6 +335,9 @@ var BladeMeta = (function () {
     recordLevel: recordLevel,
     getLevelProgress: getLevelProgress,
     addShards: addShards,
+    buyTheme: buyTheme,
+    equipTheme: equipTheme,
+    getThemes: getThemes,
   };
 
   return BladeMeta;

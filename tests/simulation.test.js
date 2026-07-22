@@ -535,6 +535,73 @@ function runLevelPassive(worldIdx, levelIdx, maxSeconds) {
     'before=' + before + ' result=' + result + ' after=' + after);
 })();
 
+/* ==================================================== CASE h1 : migration themes */
+(function () {
+  // h1 : une ancienne sauvegarde sans champ themes, chargée -> unlocked ['grid'], equipped 'grid'
+  var pCfg = require.resolve('../js/config.js');
+  var pMeta = require.resolve('../js/meta.js');
+  delete require.cache[pCfg];
+  delete require.cache[pMeta];
+
+  var fakeLS = {
+    _store: {},
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(this._store, k) ? this._store[k] : null; },
+    setItem: function (k, v) { this._store[k] = String(v); },
+  };
+  var hadWindow = typeof global.window !== 'undefined';
+  var prevWindow = global.window;
+  global.window = { localStorage: fakeLS };
+
+  var oldSave = {
+    best: 4200, bestCombo: 12, totalScore: 15000, shards: 500,
+    blades: { unlocked: ['neon'], equipped: 'neon' },
+    daily: { lastDate: null, streak: 0, scores: {} },
+  };
+  fakeLS.setItem('bladeExeSave.v1', JSON.stringify(oldSave));
+
+  var Mh1 = require('../js/meta.js');
+  var loadedH1 = Mh1.load();
+
+  check('h1) migration — save sans themes -> unlocked [grid], equipped grid',
+    Array.isArray(loadedH1.themes.unlocked) && loadedH1.themes.unlocked.length === 1
+    && loadedH1.themes.unlocked[0] === 'grid' && loadedH1.themes.equipped === 'grid',
+    'unlocked=[' + loadedH1.themes.unlocked.join(',') + '] equipped=' + loadedH1.themes.equipped);
+
+  if (hadWindow) global.window = prevWindow; else delete global.window;
+  delete require.cache[pCfg];
+  delete require.cache[pMeta];
+})();
+
+/* ==================================================== CASE h2 : buyTheme */
+(function () {
+  var M = freshMeta();
+  var refuseNoMoney = M.buyTheme('sakura'); // shards=0, price 3000
+  var funded = M.addShards(3000);
+  var buyOk = M.buyTheme('sakura'); // price 3000 -> ok, reste 0
+  var buyAgain = M.buyTheme('sakura'); // déjà possédé -> refus
+  var buyGrid = M.buyTheme('grid'); // price 0 -> jamais achetable -> refus
+  check('h2) buyTheme — refus solde insuffisant, achat SAKURA ok (débite 3000), re-achat refusé, achat grid refusé',
+    refuseNoMoney.ok === false && refuseNoMoney.shards === 0
+    && funded === 3000
+    && buyOk.ok === true && buyOk.shards === 0
+    && M.getThemes().filter(function (t) { return t.id === 'sakura'; })[0].unlocked === true
+    && buyAgain.ok === false && buyAgain.shards === 0
+    && buyGrid.ok === false && buyGrid.shards === 0,
+    'refuse=' + refuseNoMoney.ok + ' buyOk=' + buyOk.ok + '/' + buyOk.shards
+    + ' buyAgain=' + buyAgain.ok + ' buyGrid=' + buyGrid.ok);
+})();
+
+/* ==================================================== CASE h3 : equipTheme */
+(function () {
+  var M = freshMeta();
+  var refuse = M.equipTheme('sakura'); // non possédé
+  M.addShards(3000);
+  M.buyTheme('sakura');
+  var accept = M.equipTheme('sakura'); // possédé après achat
+  check('h3) equipTheme — refus si non possédé, ok après achat', refuse === false && accept === true,
+    'sakura(non possédé)=' + refuse + ' sakura(après achat)=' + accept);
+})();
+
 /* ---------------------------------------------------------------- rapport */
 console.log('\n=== BLADE.EXE — simulation.test.js ===');
 console.log(results.join('\n'));

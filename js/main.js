@@ -61,6 +61,8 @@
     muted: false,
     unlockedThisRun: [],
     shopIndex: 0,
+    shopTab: "blades",
+    shopThemeIndex: 0,
     shardsEarnedThisRun: 0,
     worldIndex: 0,
     levelIndex: 1,
@@ -71,10 +73,17 @@
     meta = BladeMeta.get();
     blades = BladeMeta.getBlades();
     menu.blades = blades;
+    menu.themes = BladeMeta.getThemes();
     // défi du jour déjà réussi aujourd'hui → bouton grisé jusqu'à demain
     menu.dailyDone = !!(meta.daily && meta.daily.lastDate === BladeMeta.todayStr());
   }
   refreshMeta(); // état initial (dailyDone au lancement)
+  function equippedTheme() {
+    var themes = menu.themes || [];
+    for (var i = 0; i < themes.length; i++) { if (themes[i].equipped) return themes[i].theme; }
+    return null;
+  }
+  BladeUI.setTheme(equippedTheme()); // thème équipé appliqué dès le boot
 
   // ---------------------------------------------------------------- run flow
   function startRun(mode) {
@@ -100,7 +109,7 @@
     refreshMeta();
     menu.unlockedThisRun = res.unlocked || [];
     menu.shardsEarnedThisRun = res.shardsEarned || 0;
-    BladeUI.setTheme(null);
+    BladeUI.setTheme(equippedTheme());
     BladeAudio.stopMusic();
     BladeAudio.startMusic("menu");
     setScreen(nextScreen);
@@ -287,7 +296,7 @@
         }
         break;
       case "menu":
-        BladeAudio.play("click"); BladeUI.setTheme(null); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
+        BladeAudio.play("click"); BladeUI.setTheme(equippedTheme()); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
         refreshMeta(); setScreen("TITLE"); break;
       case "mute":
         BladeAudio.setMuted(!BladeAudio.muted);
@@ -297,17 +306,19 @@
       case "bladePrev": cycleBlade(-1); break;
       case "bladeNext": cycleBlade(1); break;
       case "shop": BladeAudio.play("click"); setScreen("SHOP"); break;
-      case "levels": BladeAudio.play("click"); BladeUI.setTheme(null); setScreen("WORLDS"); break;
+      case "levels": BladeAudio.play("click"); BladeUI.setTheme(equippedTheme()); setScreen("WORLDS"); break;
       case "back":
         BladeAudio.play("click");
-        if (screen === "LEVELS") { BladeUI.setTheme(null); setScreen("WORLDS"); }
+        if (screen === "LEVELS") { BladeUI.setTheme(equippedTheme()); setScreen("WORLDS"); }
         else if (screen === "LEVELEND") { setScreen("LEVELS"); }
         else { setScreen("TITLE"); }
         break;
-      case "shopPrev": shopCycle(-1); break;
-      case "shopNext": shopCycle(1); break;
-      case "buy": buyShopBlade(); break;
-      case "equip": equipShopBlade(); break;
+      case "tabBlades": BladeAudio.play("click"); menu.shopTab = "blades"; break;
+      case "tabThemes": BladeAudio.play("click"); menu.shopTab = "themes"; break;
+      case "shopPrev": if (menu.shopTab === "themes") themeCycle(-1); else shopCycle(-1); break;
+      case "shopNext": if (menu.shopTab === "themes") themeCycle(1); else shopCycle(1); break;
+      case "buy": if (menu.shopTab === "themes") buyShopTheme(); else buyShopBlade(); break;
+      case "equip": if (menu.shopTab === "themes") equipShopTheme(); else equipShopBlade(); break;
       default: break;
     }
   }
@@ -330,6 +341,28 @@
     var ok = BladeMeta.equipBlade(b.id);
     if (ok) {
       BladeUI.setBlade(b);
+      refreshMeta();
+    }
+  }
+  function themeCycle(dir) {
+    var n = menu.themes.length;
+    if (!n) return;
+    menu.shopThemeIndex = ((menu.shopThemeIndex + dir) % n + n) % n;
+    BladeAudio.play("click");
+  }
+  function buyShopTheme() {
+    var t = menu.themes[menu.shopThemeIndex];
+    if (!t) return;
+    var res = BladeMeta.buyTheme(t.id);
+    refreshMeta();
+    BladeAudio.play(res && res.ok ? "bossDone" : "wrong");
+  }
+  function equipShopTheme() {
+    var t = menu.themes[menu.shopThemeIndex];
+    if (!t) return;
+    var ok = BladeMeta.equipTheme(t.id);
+    if (ok) {
+      BladeUI.setTheme(t.theme);
       refreshMeta();
     }
   }

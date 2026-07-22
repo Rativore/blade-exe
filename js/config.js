@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.15',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.16',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -136,6 +136,23 @@ var CONFIG = {
     { id: 'toxic', name: 'TOXIC.SECTOR', music: 'toxic',
       theme: { BG: '#020a02', GRID1: '#39ff14', GRID2: '#eaff00',
                HUE_A: '#39ff14', HUE_B: '#eaff00', DANGER: '#ff1fd0', TEXT: '#eaffe0' } },
+  ],
+
+  /* ------------------------------------------------ thèmes d'ambiance (boutique) */
+  // Habillage complet hors mode niveaux (menu, arcade, défi) : mêmes clés que
+  // les thèmes de monde. price 0 = défaut gratuit. Très chers = prestige long terme.
+  THEMES: [
+    { id: 'grid',   name: 'GRID',   price: 0,
+      theme: null }, // null = DA de base (CONFIG.COLORS)
+    { id: 'sakura', name: 'SAKURA', price: 3000,
+      theme: { BG: '#0a0308', GRID1: '#ff8ac2', GRID2: '#ffffff',
+               HUE_A: '#ff8ac2', HUE_B: '#ffffff', DANGER: '#7dff00', TEXT: '#ffeef7' } },
+    { id: 'midas',  name: 'MIDAS',  price: 6000,
+      theme: { BG: '#0a0800', GRID1: '#ffd000', GRID2: '#ff9500',
+               HUE_A: '#ffd000', HUE_B: '#ff9500', DANGER: '#00f0ff', TEXT: '#fff8dc' } },
+    { id: 'void',   name: 'VOID',   price: 12000,
+      theme: { BG: '#000000', GRID1: '#ffffff', GRID2: '#7a7a7a',
+               HUE_A: '#ffffff', HUE_B: '#9adcff', DANGER: '#ff2b4a', TEXT: '#ffffff' } },
   ],
 
   /* ------------------------------------------------ lames cosmétiques (trail) */
@@ -277,6 +294,12 @@ var CONFIG = {
  *   déjà possédée, ou shards < price ; sinon débite, ajoute à unlocked, persiste.
  * save.gamesPlayed (migration : 0) — incrémenté à chaque recordRun ET chaque
  *   recordLevel (sert au seuil ADS.INTERSTITIAL_MIN_GAMES).
+ * save.themes = { unlocked:['grid'], equipped:'grid' } (migration : défauts).
+ * BladeMeta.buyTheme(id) → { ok, shards } — mêmes refus que buyBlade
+ *   (inconnu/price 0 non achetable ? 'grid' est possédé d'office ; déjà
+ *   possédé ; solde insuffisant), débite et déverrouille sinon.
+ * BladeMeta.equipTheme(id) → bool (refus si non possédé).
+ * BladeMeta.getThemes() → [{...CONFIG.THEMES[i], unlocked:bool, equipped:bool}]
  * BladeMeta.addShards(n) → shards — crédite n (>0) éclats et persiste
  *   (récompenses pub : ×2 défi, +bonus boutique plus tard).
  * --- mode NIVEAUX ---
@@ -360,11 +383,15 @@ var CONFIG = {
  *   SUIVANT (si réussite et suivant jouable) / REJOUER / NIVEAUX →
  *   btnRects.LEVELEND = {next, replay, back}.
  *   PLAY en mode level : barre de progression score/target (comme le défi).
- *   BOUTIQUE (screen SHOP) : solde ◆ en haut, carrousel de lames (une à la
- *   fois, ◀ ▶) avec aperçu de la traînée en couleur, nom, prix ou état
- *   (POSSÉDÉE / ÉQUIPÉE / RÉCOMPENSE DE SÉRIE x J), gros bouton contextuel
- *   ACHETER (si achetable et solde suffisant, grisé sinon) ou ÉQUIPER (si
- *   possédée), bouton RETOUR. btnRects.SHOP → 'shopPrev'|'shopNext'|'buy'|
+ *   BOUTIQUE (screen SHOP) : solde ◆ en haut, DEUX ONGLETS — SABRES / THÈMES
+ *   (btnRects.SHOP.tabBlades / tabThemes, onglet actif dans menu.shopTab
+ *   'blades'|'themes'). Chaque onglet = carrousel (une entrée à la fois, ◀ ▶,
+ *   index menu.shopIndex / menu.shopThemeIndex) : SABRES = aperçu de la
+ *   traînée en couleur ; THÈMES = mini-aperçu du thème (vignette : fond +
+ *   lignes de grille + 2 hexagones aux teintes HUE_A/HUE_B). Nom, prix ou
+ *   état (POSSÉDÉE / ÉQUIPÉE / RÉCOMPENSE DE SÉRIE x J), gros bouton
+ *   contextuel ACHETER (grisé si solde insuffisant) ou ÉQUIPER, RETOUR.
+ *   btnRects.SHOP → 'tabBlades'|'tabThemes'|'shopPrev'|'shopNext'|'buy'|
  *   'equip'|'back'. TITLE : bouton BOUTIQUE (sous les 2 modes) + solde ◆
  *   affiché ; OVER/WIN : ligne « +X ◆ » (shardsEarned du run, via
  *   menu.shardsEarnedThisRun). Layout paysage 2 colonnes comme le reste.
@@ -414,8 +441,13 @@ var CONFIG = {
  * si 'home' → terminer le run comme une fin de partie (recordRun avec le
  * score courant, musique menu, écran TITLE), sinon stroke normal.
  * BOUTIQUE : écran SHOP (pas d'engine) — 'shop' depuis TITLE, 'back' →
- * TITLE ; 'buy' → BladeMeta.buyBlade + son 'bossDone' si ok / 'wrong' si
- * refus ; 'equip' → equipBlade + setBlade ; menu.shopIndex pour le carrousel.
+ * TITLE ; onglets 'tabBlades'/'tabThemes' → menu.shopTab ; 'buy'/'equip'
+ * agissent sur l'entrée de l'onglet actif (buyBlade/equipBlade+setBlade ou
+ * buyTheme/equipTheme) + son 'bossDone' si ok / 'wrong' si refus.
+ * THÈME ÉQUIPÉ : appliqué via BladeUI.setTheme(themeDef.theme) PARTOUT hors
+ * mode niveaux (boot, menus, arcade, défi) — les niveaux imposent la DA de
+ * leur monde et le retour menu/fin de run restaure le thème équipé (plus
+ * jamais setTheme(null) en dur : toujours setTheme(equippedTheme())).
  * Fin de run : menu.shardsEarnedThisRun = recordRun().shardsEarned (affiché
  * sur OVER/WIN) ; musique menu conservée sur SHOP.
  * PUB (view.adOffers, fourni par main.js) : OVER — bouton « CONTINUER (PUB) »
