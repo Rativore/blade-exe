@@ -540,7 +540,8 @@ var BladeUI = (function () {
     for (var key in rects) {
       if (!Object.prototype.hasOwnProperty.call(rects, key)) continue;
       var r = rects[key];
-      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return key;
+      var pad = 10; // tolérance tactile
+      if (x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad) return key;
     }
     return null;
   }

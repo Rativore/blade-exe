@@ -146,6 +146,7 @@
   function onDown(e) {
     e.preventDefault();
     BladeAudio.unlock();
+    updatePortraitBlocked(); // recalcul frais : les events resize/orientationchange d'iOS arrivent parfois avec des dimensions périmées
     if (isTouch && !landscapeLockTried) { landscapeLockTried = true; tryLockLandscape(); }
     if (screen === "TITLE") BladeAudio.startMusic("menu");
     if (portraitBlocked) return; // input jeu bloqué, le déblocage audio ci-dessus reste actif
@@ -192,10 +193,19 @@
 
   // ---------------------------------------------------------------- loop
   var t0 = performance.now();
+  var lastW = window.innerWidth, lastH = window.innerHeight;
   function frame(now) {
     var dt = (now - t0) / 1000; t0 = now;
     if (dt > 0.05) dt = 0.05;
     if (dt < 0) dt = 0;
+
+    // filet de sécurité iOS : détecter le changement de dimensions même si
+    // resize/orientationchange n'a pas été émis (rotation, barre Safari, PWA)
+    if (window.innerWidth !== lastW || window.innerHeight !== lastH) {
+      lastW = window.innerWidth; lastH = window.innerHeight;
+      onResize();
+      updatePortraitBlocked();
+    }
 
     if (screen === "PLAY" && engine) {
       routeEvents(engine.update(dt));

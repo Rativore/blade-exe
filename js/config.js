@@ -18,7 +18,7 @@
 
 var CONFIG = {
 
-  VERSION: '1.6',             // affichée à l'écran titre — à incrémenter
+  VERSION: '1.7',             // affichée à l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
