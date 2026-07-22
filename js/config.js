@@ -177,7 +177,10 @@ var CONFIG = {
  * BladeMeta.todayStr(d?) → 'YYYY-MM-DD' locale
  *
  * ----------------------------------------------------------------- audio.js
- * BladeAudio.init()            // à appeler au 1er geste utilisateur (AudioContext)
+ * BladeAudio.init()            // crée l'AudioContext (+ resume immédiat)
+ * BladeAudio.unlock()          // init() + resume() — à appeler à CHAQUE geste
+ *                              // utilisateur (touchstart ET touchend : iOS ne
+ *                              // débloque parfois le son qu'au relâchement)
  * BladeAudio.play(name)        // 'slice'|'wrong'|'virus'|'miss'|'wave'|'slowmo'
  *                              // |'boss'|'bossDone'|'over'|'dailyWin'|'click'
  * BladeAudio.startMusic() / BladeAudio.stopMusic()

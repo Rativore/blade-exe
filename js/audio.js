@@ -24,6 +24,7 @@ var BladeAudio = (function () {
       master = ctx.createGain();
       master.gain.value = muted ? 0 : 0.6;
       master.connect(ctx.destination);
+      resume();
     } catch (err) {
       ctx = null;
       master = null;
@@ -346,8 +347,16 @@ var BladeAudio = (function () {
     }
   }
 
+  // Déblocage mobile : à appeler depuis les gestes utilisateur (touchstart ET
+  // touchend — iOS ne considère parfois que le relâchement comme un vrai geste).
+  function unlock() {
+    init();
+    resume();
+  }
+
   var api = {
     init: init,
+    unlock: unlock,
     play: play,
     setMuted: setMuted,
     startMusic: startMusic,

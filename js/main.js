@@ -123,7 +123,7 @@
   }
   function onDown(e) {
     e.preventDefault();
-    BladeAudio.init();
+    BladeAudio.unlock();
     var p = getXY(e);
     if (screen === "PLAY") {
       slicing = true;
@@ -141,6 +141,7 @@
     BladeUI.strokePoint(p.x, p.y);
   }
   function onUp(e) {
+    BladeAudio.unlock();
     if (screen === "PLAY" && slicing) {
       routeEvents(engine.strokeEnd());
       BladeUI.strokeEnd();
