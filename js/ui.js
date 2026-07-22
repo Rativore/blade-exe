@@ -923,6 +923,7 @@ var BladeUI = (function () {
     // niveau réussi = pas de REJOUER direct (comme le défi) — le rejeu passe par la grille
     if (!res.success) buttons.push({ key: "replay", label: "REJOUER", col: C.MG });
     buttons.push({ key: "back", label: "NIVEAUX", col: C.GOLD });
+    buttons.push({ key: "menu", label: "MENU", col: C.TEXT });
 
     var bw, bh, gap, i;
     if (landscape) {
