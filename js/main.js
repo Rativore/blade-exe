@@ -51,7 +51,10 @@
     muted: false,
     unlockedThisRun: [],
     shopIndex: 0,
-    shardsEarnedThisRun: 0
+    shardsEarnedThisRun: 0,
+    worldIndex: 0,
+    levelIndex: 1,
+    levelResult: null
   };
 
   function refreshMeta() {
@@ -81,15 +84,69 @@
     refreshMeta();
     menu.unlockedThisRun = res.unlocked || [];
     menu.shardsEarnedThisRun = res.shardsEarned || 0;
+    BladeUI.setTheme(null);
     BladeAudio.stopMusic();
     BladeAudio.startMusic("menu");
     screen = nextScreen;
   }
 
+  // ---------------------------------------------------------------- mode NIVEAUX
+  function isWorldUnlocked(worldIdx) {
+    if (worldIdx === 0) return true;
+    var progress = BladeMeta.getLevelProgress();
+    var prevStars = progress.starsByWorld[worldIdx - 1] || 0;
+    return prevStars >= BladeLevels.worldGate(worldIdx);
+  }
+  function isLevelUnlocked(worldIdx, levelIdx) {
+    if (levelIdx === 1) return true;
+    var world = CONFIG.WORLDS[worldIdx];
+    var progress = BladeMeta.getLevelProgress();
+    var prevStars = progress.stars[world.id + "-" + (levelIdx - 1)] || 0;
+    if (prevStars <= 0) return false;
+    var worldStars = progress.starsByWorld[worldIdx] || 0;
+    return worldStars >= BladeLevels.levelGate(worldIdx, levelIdx);
+  }
+  function startLevel(worldIdx, levelIdx) {
+    var world = CONFIG.WORLDS[worldIdx];
+    var spec = BladeLevels.levelSpec(worldIdx, levelIdx);
+    currentMode = "level";
+    overHandled = false;
+    menu.worldIndex = worldIdx;
+    menu.levelIndex = levelIdx;
+    menu.levelResult = null;
+    var size = BladeUI.resize();
+    engine = BladeEngine.create({ mode: "level", seed: spec.seed, viewport: { w: size.w, h: size.h }, level: spec });
+    BladeUI.setTheme(world.theme);
+    screen = "PLAY";
+    BladeAudio.startMusic(world.music);
+  }
+  function handleLevelEnd(success, e) {
+    if (overHandled) return;
+    overHandled = true;
+    var world = CONFIG.WORLDS[menu.worldIndex];
+    var target = engine ? engine.state.target : 0;
+    var shardsEarned = 0, stars = 0;
+    if (success) {
+      stars = e.stars || 0;
+      var res = BladeMeta.recordLevel({ worldId: world.id, levelIdx: menu.levelIndex, stars: stars, score: e.score });
+      shardsEarned = (res && res.shardsEarned) || 0;
+      refreshMeta();
+    }
+    var perWorld = (CONFIG.LEVELS && CONFIG.LEVELS.PER_WORLD) || 30;
+    var hasNext = success && menu.levelIndex < perWorld && isLevelUnlocked(menu.worldIndex, menu.levelIndex + 1);
+    menu.levelResult = {
+      success: success, stars: stars, score: e.score, target: target,
+      shardsEarned: shardsEarned, hasNext: hasNext
+    };
+    BladeAudio.stopMusic();
+    BladeAudio.startMusic("menu");
+    screen = "LEVELEND";
+  }
+
   var SOUND_FOR_EVENT = {
     slice: "slice", wrong: "wrong", virus: "virus", miss: "miss", wave: "wave",
     slowmo: "slowmo", bossSpawn: "boss", bossCut: "slice", bossDone: "bossDone", over: "over",
-    dailyWin: "dailyWin"
+    dailyWin: "dailyWin", levelWin: "dailyWin"
   };
   function routeEvents(events) {
     if (!events || !events.length) return;
@@ -99,8 +156,12 @@
       var s = SOUND_FOR_EVENT[ev.type];
       if (s) BladeAudio.play(s);
       if (ev.type === "wave") BladeAudio.setMusicIntensity((ev.id - 1) / 5);
-      if (ev.type === "over") handleRunEnd(ev, "OVER");
+      if (ev.type === "over") {
+        if (currentMode === "level") handleLevelEnd(false, ev);
+        else handleRunEnd(ev, "OVER");
+      }
       if (ev.type === "dailyWin") handleRunEnd(ev, "WIN");
+      if (ev.type === "levelWin") handleLevelEnd(true, ev);
     }
   }
 
@@ -119,12 +180,44 @@
   }
   function handleAction(action) {
     if (!action) return;
+    if (action === "world0" || action === "world1") {
+      var wIdx = (action === "world0") ? 0 : 1;
+      if (isWorldUnlocked(wIdx)) {
+        BladeAudio.play("click");
+        menu.worldIndex = wIdx;
+        BladeUI.setTheme(CONFIG.WORLDS[wIdx].theme);
+        screen = "LEVELS";
+      } else {
+        BladeAudio.play("wrong");
+      }
+      return;
+    }
+    if (action.indexOf("lvl") === 0) {
+      var lvlIdx = parseInt(action.slice(3), 10);
+      if (isLevelUnlocked(menu.worldIndex, lvlIdx)) {
+        BladeAudio.play("click");
+        startLevel(menu.worldIndex, lvlIdx);
+      } else {
+        BladeAudio.play("wrong");
+      }
+      return;
+    }
     switch (action) {
       case "arcade": BladeAudio.play("click"); startRun("arcade"); break;
       case "daily": BladeAudio.play("click"); startRun("daily"); break;
-      case "replay": BladeAudio.play("click"); startRun(currentMode); break;
+      case "replay":
+        BladeAudio.play("click");
+        if (screen === "LEVELEND") startLevel(menu.worldIndex, menu.levelIndex);
+        else startRun(currentMode);
+        break;
+      case "next":
+        if (menu.levelResult && menu.levelResult.hasNext) {
+          BladeAudio.play("click");
+          startLevel(menu.worldIndex, menu.levelIndex + 1);
+        }
+        break;
       case "menu":
-        BladeAudio.play("click"); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
+        BladeAudio.play("click"); BladeUI.setTheme(null); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
         refreshMeta(); screen = "TITLE"; break;
       case "mute":
         BladeAudio.setMuted(!BladeAudio.muted);
@@ -134,7 +227,13 @@
       case "bladePrev": cycleBlade(-1); break;
       case "bladeNext": cycleBlade(1); break;
       case "shop": BladeAudio.play("click"); screen = "SHOP"; break;
-      case "back": BladeAudio.play("click"); screen = "TITLE"; break;
+      case "levels": BladeAudio.play("click"); BladeUI.setTheme(null); screen = "WORLDS"; break;
+      case "back":
+        BladeAudio.play("click");
+        if (screen === "LEVELS") { BladeUI.setTheme(null); screen = "WORLDS"; }
+        else if (screen === "LEVELEND") { screen = "LEVELS"; }
+        else { screen = "TITLE"; }
+        break;
       case "shopPrev": shopCycle(-1); break;
       case "shopNext": shopCycle(1); break;
       case "buy": buyShopBlade(); break;
@@ -185,7 +284,14 @@
     if (screen === "PLAY") {
       if (BladeUI.hitTest(p.x, p.y, "PLAY") === "home") {
         BladeAudio.play("click");
-        handleRunEnd({ score: engine.state.score, maxCombo: engine.state.maxCombo }, "TITLE");
+        if (currentMode === "level") {
+          overHandled = true;
+          BladeAudio.stopMusic();
+          BladeAudio.startMusic("menu");
+          screen = "LEVELS";
+        } else {
+          handleRunEnd({ score: engine.state.score, maxCombo: engine.state.maxCombo }, "TITLE");
+        }
         return;
       }
       slicing = true;

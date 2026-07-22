@@ -60,7 +60,9 @@
     if (!this.CFG) throw new Error('BladeEngine: CONFIG introuvable');
     if (!this.LV) throw new Error('BladeEngine: BladeLevels introuvable');
 
-    this.mode = (opts.mode === 'daily') ? 'daily' : 'arcade';
+    this.mode = (opts.mode === 'daily') ? 'daily'
+              : (opts.mode === 'level') ? 'level' : 'arcade';
+    this.level = (this.mode === 'level') ? (opts.level || null) : null;
     this.seed = (opts.seed | 0) || 1;
     this.rng = mulberry32(this.seed);
 
@@ -73,6 +75,7 @@
     this.spawnT = 0.4;
     this.bossCount = 0;   // nombre de boss déjà déclenchés
     this.bossActive = false;
+    this._levelBossSpawned = false;   // mode level : un seul boss autorisé
     this.stroking = false;
     this.lastPt = null;
 
@@ -86,6 +89,7 @@
       maxCombo: 0,
       wave: { id: w0.id, name: w0.name },
       slowmo: 0,
+      target: this.level ? this.level.target : null,   // barre de progression (level uniquement)
       objs: []
     };
     this._objs = this.state.objs;
@@ -199,14 +203,14 @@
           o.size = o.growStartS + (o.maxS - o.growStartS) * 0.5; // timer -> 50 %
           var remaining = o.seq.length - o.idx;
           events.push({ type: 'bossCut', remaining: remaining, x: o.x, y: o.y });
-          this._checkDailyWin(events);
+          this._checkWin(events);
           if (remaining <= 0) {
             var done = BOSS.POINTS_DONE * mB;
             this.state.score += done;
             objs.splice(i, 1);
             this.bossActive = false;
             events.push({ type: 'bossDone', points: done, x: o.x, y: o.y });
-            this._checkDailyWin(events);
+            this._checkWin(events);
           } else {
             o.req = o.seq[o.idx] + o.rotAcc;
           }
@@ -233,7 +237,7 @@
         } else {
           o.req = o.seq[o.idx] + o.rotAcc; // coupe suivante (objet à double coupe)
         }
-        this._checkDailyWin(events);
+        this._checkWin(events);
       } else {
         this._setCombo(0);
         o.size *= CUT.WRONG_SHRINK;
@@ -244,13 +248,20 @@
     }
   };
 
-  // mode daily : score >= DAILY.GOAL -> status WIN (idempotent : ne redéclenche
-  // jamais l'event une fois le run passé hors PLAY)
-  Engine.prototype._checkDailyWin = function (events) {
-    if (this.mode !== 'daily' || this.state.status !== 'PLAY') return;
-    if (this.state.score >= this.CFG.DAILY.GOAL) {
-      this.state.status = 'WIN';
-      events.push({ type: 'dailyWin', score: this.state.score, maxCombo: this.state.maxCombo });
+  // victoire (idempotent : ne redéclenche jamais l'event une fois hors PLAY) —
+  // daily : score >= DAILY.GOAL -> 'dailyWin' ; level : score >= target -> 'levelWin'
+  Engine.prototype._checkWin = function (events) {
+    if (this.state.status !== 'PLAY') return;
+    if (this.mode === 'daily') {
+      if (this.state.score >= this.CFG.DAILY.GOAL) {
+        this.state.status = 'WIN';
+        events.push({ type: 'dailyWin', score: this.state.score, maxCombo: this.state.maxCombo });
+      }
+    } else if (this.mode === 'level') {
+      if (this.state.score >= this.state.target) {
+        this.state.status = 'WIN';
+        events.push({ type: 'levelWin', score: this.state.score, maxCombo: this.state.maxCombo, stars: this.state.lives });
+      }
     }
   };
 
@@ -280,15 +291,28 @@
     var ts = this.state.slowmo > 0 ? CUT.SLOWMO_SCALE : 1;
     var wdt = dt * ts;
 
-    // vague courante
-    var wave = LV.waveFor(this.state.score);
-    if (wave.id !== this.state.wave.id) {
-      this.state.wave = { id: wave.id, name: wave.name };
-      events.push({ type: 'wave', id: wave.id, name: wave.name });
+    // vague courante — mode level : paramètres de spawn FIXES (pas de waveFor,
+    // pas d'événement 'wave')
+    var wave;
+    if (this.mode === 'level') {
+      wave = this.level;
+    } else {
+      wave = LV.waveFor(this.state.score);
+      if (wave.id !== this.state.wave.id) {
+        this.state.wave = { id: wave.id, name: wave.name };
+        events.push({ type: 'wave', id: wave.id, name: wave.name });
+      }
     }
 
-    // apparition d'un boss
-    if (!this.bossActive && this.state.score >= LV.nextBossScore(this.bossCount)) {
+    // apparition d'un boss — level : UN seul boss quand score >= bossAt×target
+    // (si bossAt non null) ; arcade/daily : boss récurrents selon les seuils
+    if (this.mode === 'level') {
+      if (this.level.bossAt != null && !this.bossActive && !this._levelBossSpawned &&
+          this.state.score >= this.level.bossAt * this.state.target) {
+        this._spawnBoss(events);
+        this._levelBossSpawned = true;
+      }
+    } else if (!this.bossActive && this.state.score >= LV.nextBossScore(this.bossCount)) {
       this._spawnBoss(events);
     }
 

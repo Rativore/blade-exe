@@ -239,6 +239,14 @@ var BladeAudio = (function () {
       musicBus.gain.value = MENU_BUS_GAIN;
       musicLowpass.frequency.value = MENU_LOWPASS_FREQ;
       musicLowpass.Q.value = 0.6;
+    } else if (kind === "inferno") {
+      musicBus.gain.value = 0.44 + intensity * 0.16;
+      musicLowpass.frequency.value = 900 + intensity * 7000;
+      musicLowpass.Q.value = 0.7;
+    } else if (kind === "toxic") {
+      musicBus.gain.value = 0.40 + intensity * 0.18;
+      musicLowpass.frequency.value = 1000 + intensity * 8000;
+      musicLowpass.Q.value = 0.65;
     } else {
       musicBus.gain.value = 0.42 + intensity * 0.18;
       musicLowpass.frequency.value = 1200 + intensity * 9000;
@@ -405,12 +413,205 @@ var BladeAudio = (function () {
     scheduleMenuArp(tones, step, t);
   }
 
+  // ------------------------------------------------- musique monde INFERNO.SYS
+  // Industriel agressif ~150 BPM, 4 mesures : kick lourd 4/4 (pitch-drop
+  // profond), basse saw distordue (WaveShaperNode), hats métalliques serrés
+  // (bruit bandpass haut + Q élevé), stabs graves toutes les 2 mesures,
+  // gamme phrygienne (ambiance sombre).
+  var INFERNO_BPM = 150;
+  var INFERNO_BEAT_DUR = 60 / INFERNO_BPM;
+  var INFERNO_STEP_DUR = INFERNO_BEAT_DUR / 4;
+  var INFERNO_STEPS_PER_BAR = 16;
+  var INFERNO_BARS_PER_LOOP = 4;
+  var INFERNO_TOTAL_STEPS = INFERNO_STEPS_PER_BAR * INFERNO_BARS_PER_LOOP;
+  var INFERNO_BASS_ROOT = 41.2;                  // E1
+  var INFERNO_PHRYGIAN = [0, 1, 3, 5, 7, 8, 10];  // gamme phrygienne naturelle
+
+  function makeDistortionCurve(amount) {
+    var n = 1024, curve = new Float32Array(n), deg = Math.PI / 180;
+    for (var i = 0; i < n; i++) {
+      var x = (i * 2) / n - 1;
+      curve[i] = (3 + amount) * x * 20 * deg / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
+  }
+  var INFERNO_DIST_CURVE = makeDistortionCurve(38);
+
+  var infernoRng = mulberry32(20260723);
+  var INFERNO_HAT_PLAN = [];
+  (function () {
+    for (var i = 0; i < INFERNO_STEPS_PER_BAR; i++) INFERNO_HAT_PLAN.push(infernoRng());
+  })();
+
+  function scheduleInfernoKick(t) {
+    tone(165, 0.24, { type: "sine", toFreq: 32, gain: 1.0, attack: 0.001, dest: musicBus, time: t });
+    if (duckGain) {
+      try {
+        duckGain.gain.cancelScheduledValues(t);
+        duckGain.gain.setValueAtTime(1, t);
+        duckGain.gain.setValueAtTime(0.1, t + 0.001);
+        duckGain.gain.exponentialRampToValueAtTime(1, t + INFERNO_BEAT_DUR * 0.8);
+      } catch (err) { /* noop */ }
+    }
+  }
+
+  function scheduleInfernoBass(t, dur) {
+    if (!ctx || !duckGain) return;
+    var osc = ctx.createOscillator();
+    var shaper = ctx.createWaveShaper();
+    var filt = ctx.createBiquadFilter();
+    var g = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(INFERNO_BASS_ROOT, t);
+    shaper.curve = INFERNO_DIST_CURVE;
+    shaper.oversample = "2x";
+    filt.type = "lowpass";
+    filt.frequency.value = 900 + intensity * 1500;
+    filt.Q.value = 1.2;
+    var peak = 0.45 + intensity * 0.1;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(shaper); shaper.connect(filt); filt.connect(g); g.connect(duckGain);
+    osc.start(t); osc.stop(t + dur + 0.03);
+  }
+
+  function scheduleInfernoHat(step, t) {
+    var posInBar = step % INFERNO_STEPS_PER_BAR;
+    var density = 0.62 + intensity * 0.38;
+    if (INFERNO_HAT_PLAN[posInBar] < density) {
+      noiseBurst(0.025, { filterType: "bandpass", freq: 8200 + intensity * 2500, q: 9 + intensity * 5, gain: 0.15, dest: musicBus, time: t });
+    }
+  }
+
+  function scheduleInfernoStab(t) {
+    var semis = INFERNO_PHRYGIAN[5]; // b6 : degré sombre caractéristique
+    var freq = INFERNO_BASS_ROOT * Math.pow(2, semis / 12);
+    tone(freq, 0.35, { type: "sawtooth", toFreq: freq * 0.85, gain: 0.4, attack: 0.004, dest: musicBus, time: t });
+    noiseBurst(0.12, { filterType: "bandpass", freq: 700, q: 2, gain: 0.2, dest: musicBus, time: t });
+  }
+
+  function scheduleInfernoStep(step, t) {
+    var posInBar = step % INFERNO_STEPS_PER_BAR;
+    var bar = Math.floor(step / INFERNO_STEPS_PER_BAR) % INFERNO_BARS_PER_LOOP;
+    if (posInBar % 4 === 0) {
+      scheduleInfernoKick(t);
+      scheduleInfernoBass(t, INFERNO_BEAT_DUR * 0.9);
+    }
+    scheduleInfernoHat(step, t);
+    if (bar % 2 === 0 && posInBar === 8) scheduleInfernoStab(t);
+  }
+
+  // ------------------------------------------------ musique monde TOXIC.SECTOR
+  // Acid ~140 BPM, 4 mesures : basse 303 (saw + lowpass résonant Q 12-18,
+  // motif 16 pas avec accents/slides, filtre balayé par enveloppe + LFO lent),
+  // kick sec, hats offbeat, blips aigus mouillés épars.
+  var TOXIC_BPM = 140;
+  var TOXIC_BEAT_DUR = 60 / TOXIC_BPM;
+  var TOXIC_STEP_DUR = TOXIC_BEAT_DUR / 4;
+  var TOXIC_STEPS_PER_BAR = 16;
+  var TOXIC_BARS_PER_LOOP = 4;
+  var TOXIC_TOTAL_STEPS = TOXIC_STEPS_PER_BAR * TOXIC_BARS_PER_LOOP;
+  var TOXIC_BASS_ROOT = 55; // A1
+  var TOXIC_SCALE = [0, 3, 5, 7, 10, 12]; // ligne acid (mineure/pentatonique)
+
+  var toxicRng = mulberry32(20260724);
+  var TOXIC_PATTERN = [];
+  (function () {
+    for (var i = 0; i < TOXIC_STEPS_PER_BAR; i++) {
+      var rest = toxicRng() < 0.18;
+      var scaleIdx = Math.floor(toxicRng() * TOXIC_SCALE.length);
+      TOXIC_PATTERN.push({
+        note: rest ? null : TOXIC_SCALE[scaleIdx],
+        accent: !rest && toxicRng() < 0.3,
+        slide: !rest && toxicRng() < 0.25,
+        q: 12 + toxicRng() * 6   // résonance 12..18
+      });
+    }
+  })();
+  var TOXIC_HAT_PLAN = [];
+  (function () {
+    for (var i = 0; i < TOXIC_STEPS_PER_BAR; i++) TOXIC_HAT_PLAN.push(toxicRng());
+  })();
+  var TOXIC_BLIP_PLAN = [];
+  (function () {
+    for (var i = 0; i < TOXIC_TOTAL_STEPS; i++) TOXIC_BLIP_PLAN.push(toxicRng());
+  })();
+
+  function scheduleToxicKick(t) {
+    tone(160, 0.09, { type: "sine", toFreq: 65, gain: 0.75, attack: 0.001, dest: musicBus, time: t });
+  }
+
+  function scheduleToxicBass(step, t) {
+    if (!ctx || !duckGain) return;
+    var posInBar = step % TOXIC_STEPS_PER_BAR;
+    var cur = TOXIC_PATTERN[posInBar];
+    if (!cur || cur.note == null) return;
+    var prevIdx = (posInBar - 1 + TOXIC_STEPS_PER_BAR) % TOXIC_STEPS_PER_BAR;
+    var prev = TOXIC_PATTERN[prevIdx];
+    var freq = TOXIC_BASS_ROOT * Math.pow(2, cur.note / 12);
+    var dur = TOXIC_STEP_DUR * (cur.slide ? 1.9 : 0.85);
+    var osc = ctx.createOscillator();
+    var filt = ctx.createBiquadFilter();
+    var g = ctx.createGain();
+    osc.type = "sawtooth";
+    filt.type = "lowpass";
+    filt.Q.value = cur.q;
+    var lfo = Math.sin((step / TOXIC_STEPS_PER_BAR) * Math.PI * 2) * 0.5 + 0.5; // balayage lent
+    var baseCut = 350 + lfo * 900 + intensity * 1400 + (cur.accent ? 900 : 0);
+    if (prev && prev.slide && prev.note != null) {
+      var prevFreq = TOXIC_BASS_ROOT * Math.pow(2, prev.note / 12);
+      osc.frequency.setValueAtTime(prevFreq, t);
+      osc.frequency.linearRampToValueAtTime(freq, t + TOXIC_STEP_DUR * 0.6);
+    } else {
+      osc.frequency.setValueAtTime(freq, t);
+    }
+    filt.frequency.setValueAtTime(baseCut * 2.4, t);
+    filt.frequency.exponentialRampToValueAtTime(Math.max(80, baseCut * 0.5), t + dur * 0.8);
+    var peak = (cur.accent ? 0.42 : 0.28) + intensity * 0.06;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(filt); filt.connect(g); g.connect(duckGain);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
+
+  function scheduleToxicHat(step, t) {
+    var posInBar = step % TOXIC_STEPS_PER_BAR;
+    if (posInBar % 2 === 0) return; // offbeat uniquement
+    var density = 0.4 + intensity * 0.5;
+    if (TOXIC_HAT_PLAN[posInBar] < density) {
+      noiseBurst(0.02, { filterType: "highpass", freq: 6500, q: 0.8, gain: 0.13, dest: musicBus, time: t });
+    }
+  }
+
+  function scheduleToxicBlip(step, t) {
+    var r = TOXIC_BLIP_PLAN[step];
+    if (r >= 0.14) return; // épars
+    var freq = 1800 + r * 4000;
+    tone(freq, 0.05, { type: "sine", toFreq: freq * 1.4, gain: 0.16, attack: 0.002, dest: musicBus, time: t });
+    tone(freq * 0.98, 0.05, { type: "sine", gain: 0.06, attack: 0.002, dest: musicBus, time: t + 0.09 }); // écho "mouillé"
+  }
+
+  function scheduleToxicStep(step, t) {
+    var posInBar = step % TOXIC_STEPS_PER_BAR;
+    if (posInBar % 4 === 0) scheduleToxicKick(t);
+    scheduleToxicBass(step, t);
+    scheduleToxicHat(step, t);
+    scheduleToxicBlip(step, t);
+  }
+
   function schedulerTick() {
     if (!ctx || !musicPlaying) return;
-    var stepDur = (musicKind === "menu") ? MENU_STEP_DUR : STEP16_DUR;
-    var totalSteps = (musicKind === "menu") ? MENU_TOTAL_STEPS : TOTAL_STEPS;
+    var stepDur, totalSteps;
+    if (musicKind === "menu") { stepDur = MENU_STEP_DUR; totalSteps = MENU_TOTAL_STEPS; }
+    else if (musicKind === "inferno") { stepDur = INFERNO_STEP_DUR; totalSteps = INFERNO_TOTAL_STEPS; }
+    else if (musicKind === "toxic") { stepDur = TOXIC_STEP_DUR; totalSteps = TOXIC_TOTAL_STEPS; }
+    else { stepDur = STEP16_DUR; totalSteps = TOTAL_STEPS; }
     while (nextNoteTime < ctx.currentTime + SCHED_AHEAD) {
       if (musicKind === "menu") scheduleMenuStep(currentStep, nextNoteTime);
+      else if (musicKind === "inferno") scheduleInfernoStep(currentStep, nextNoteTime);
+      else if (musicKind === "toxic") scheduleToxicStep(currentStep, nextNoteTime);
       else scheduleStep(currentStep, nextNoteTime);
       nextNoteTime += stepDur;
       currentStep = (currentStep + 1) % totalSteps;
@@ -444,9 +645,11 @@ var BladeAudio = (function () {
   }
 
   // kind : 'menu' (nappe calme écran titre) | 'game' (défaut si omis, boucle
-  // hyperpop inchangée)
+  // hyperpop inchangée) | 'inferno' (industriel, monde INFERNO.SYS) | 'toxic'
+  // (acid, monde TOXIC.SECTOR)
+  var MUSIC_KINDS = { menu: 1, game: 1, inferno: 1, toxic: 1 };
   function startMusic(kind) {
-    kind = (kind === "menu") ? "menu" : "game";
+    kind = MUSIC_KINDS[kind] ? kind : "game";
     if (!hasAudio) return;
     if (!ctx) init();
     if (!ctx) return;
@@ -468,21 +671,32 @@ var BladeAudio = (function () {
     teardownMusicChain(false);
   }
 
-  // Ne pilote que la boucle 'game' (tempo ressenti + lowpass) ; sans effet
-  // pendant la nappe 'menu'.
+  // Pilote 'game', 'inferno' et 'toxic' (densité percussions via `intensity`
+  // + ouverture du filtre + léger gain) ; sans effet pendant la nappe 'menu'.
   function setMusicIntensity(i) {
     intensity = Math.max(0, Math.min(1, i));
-    if (musicKind !== "game") return;
+    if (musicKind === "menu") return;
     if (!ctx) return;
     var t = now();
+    var lpFreq, busGain;
+    if (musicKind === "inferno") {
+      lpFreq = 900 + intensity * 7000;
+      busGain = 0.44 + intensity * 0.16;
+    } else if (musicKind === "toxic") {
+      lpFreq = 1000 + intensity * 8000;
+      busGain = 0.40 + intensity * 0.18;
+    } else {
+      lpFreq = 1200 + intensity * 9000;
+      busGain = 0.42 + intensity * 0.18;
+    }
     if (musicLowpass) {
       try {
         musicLowpass.frequency.cancelScheduledValues(t);
-        musicLowpass.frequency.setTargetAtTime(1200 + intensity * 9000, t, 0.08);
+        musicLowpass.frequency.setTargetAtTime(lpFreq, t, 0.08);
       } catch (err) { /* noop */ }
     }
     if (musicBus) {
-      try { musicBus.gain.setTargetAtTime(0.42 + intensity * 0.18, t, 0.08); } catch (err) { /* noop */ }
+      try { musicBus.gain.setTargetAtTime(busGain, t, 0.08); } catch (err) { /* noop */ }
     }
   }
 

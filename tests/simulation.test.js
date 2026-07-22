@@ -13,6 +13,7 @@
 var path = require('path');
 var BladeEngine = require('../js/engine.js');
 var BladeLevels = require('../js/levels.js');
+var CONFIG = require('../js/config.js');
 
 var pass = 0, fail = 0;
 var results = [];
@@ -371,6 +372,110 @@ function freshMeta() {
   if (hadWindow) global.window = prevWindow; else delete global.window;
   delete require.cache[pCfg];
   delete require.cache[pMeta];
+})();
+
+/* ======================================================== CASE f : NIVEAUX */
+
+/* ---- f1) levelSpec : déterminisme + courbe (target croissant, grow décroissant,
+   virusP=0 avant le nv 4 dans le monde 1) */
+(function () {
+  var s1 = BladeLevels.levelSpec(0, 5);
+  var s2 = BladeLevels.levelSpec(0, 5);
+  check('f1a) levelSpec déterministe (2 appels identiques)', JSON.stringify(s1) === JSON.stringify(s2));
+
+  var okAll = true, detail = '';
+  for (var w = 0; w < 2; w++) {
+    var prevT = -Infinity, prevG = Infinity;
+    for (var i = 1; i <= CONFIG.LEVELS.PER_WORLD; i++) {
+      var sp = BladeLevels.levelSpec(w, i);
+      if (sp.target <= prevT) { okAll = false; detail += 'target monde' + w + ' nv' + i + ' non croissant; '; }
+      if (sp.grow >= prevG) { okAll = false; detail += 'grow monde' + w + ' nv' + i + ' non décroissant; '; }
+      if (w === 0 && i < 4 && sp.virusP !== 0) { okAll = false; detail += 'virusP monde0 nv' + i + '!=0; '; }
+      prevT = sp.target; prevG = sp.grow;
+    }
+  }
+  check('f1b) courbe — target strictement croissant, grow décroissant, virusP=0 avant nv4 (monde 1)', okAll, detail);
+})();
+
+/* ---- f2) gates */
+(function () {
+  var g11a = BladeLevels.levelGate(0, 11), g11b = BladeLevels.levelGate(1, 11);
+  var g21 = BladeLevels.levelGate(0, 21);
+  var wg1 = BladeLevels.worldGate(1);
+  check('f2) gates — levelGate(*,11)=15, levelGate(*,21)=35, worldGate(1)=55',
+    g11a === 15 && g11b === 15 && g21 === 35 && wg1 === 55,
+    'g11=' + g11a + '/' + g11b + ' g21=' + g21 + ' worldGate1=' + wg1);
+})();
+
+/* ---- f3) recordLevel : récompenses, rejouer sans améliorer, boss x2 */
+(function () {
+  var BladeMeta = freshMeta();
+  var r1 = BladeMeta.recordLevel({ worldId: 'inferno', levelIdx: 1, stars: 2, score: 400 });
+  var r2 = BladeMeta.recordLevel({ worldId: 'inferno', levelIdx: 1, stars: 2, score: 450 });
+  var r3 = BladeMeta.recordLevel({ worldId: 'inferno', levelIdx: 1, stars: 3, score: 500 });
+  check('f3a) première réussite 2★ niveau normal = 20+2×10=40 ◆, rejouer 2★=0, passer à 3★=+10',
+    r1.shardsEarned === 40 && r1.improved === true
+    && r2.shardsEarned === 0 && r2.improved === false
+    && r3.shardsEarned === 10 && r3.improved === true,
+    'r1=' + r1.shardsEarned + ' r2=' + r2.shardsEarned + ' r3=' + r3.shardsEarned);
+
+  var rBoss = BladeMeta.recordLevel({ worldId: 'inferno', levelIdx: 10, stars: 2, score: 900 });
+  check('f3b) niveau boss — récompense ×2 (20+2×10)×2=80', rBoss.shardsEarned === 80, 'shardsEarned=' + rBoss.shardsEarned);
+})();
+
+/* ---- f4) simulation engine mode 'level' */
+function runLevelPerfect(worldIdx, levelIdx, maxSeconds) {
+  var spec = BladeLevels.levelSpec(worldIdx, levelIdx);
+  var stats = { threw: false, err: null, levelWinEvents: 0, winStars: null, finalStatus: null };
+  try {
+    var engine = BladeEngine.create({ mode: 'level', seed: spec.seed, viewport: { w: VIEW.w, h: VIEW.h }, level: spec });
+    var frames = Math.round(maxSeconds / DT);
+    for (var f = 0; f < frames; f++) {
+      var ev = engine.update(DT);
+      for (var k = 0; k < ev.length; k++) {
+        if (ev[k].type === 'levelWin') { stats.levelWinEvents++; stats.winStars = ev[k].stars; }
+      }
+      var objs = engine.state.objs;
+      for (var i = objs.length - 1; i >= 0; i--) {
+        var o = objs[i];
+        if (o.virus) continue;
+        var r = perfectSlice(engine, o);
+        if (r) for (var k2 = 0; k2 < r.length; k2++) {
+          if (r[k2].type === 'levelWin') { stats.levelWinEvents++; stats.winStars = r[k2].stars; }
+        }
+      }
+      if (engine.state.status !== 'PLAY') break;
+    }
+    stats.finalStatus = engine.state.status;
+  } catch (e) { stats.threw = true; stats.err = e && e.message; }
+  return stats;
+}
+
+function runLevelPassive(worldIdx, levelIdx, maxSeconds) {
+  var spec = BladeLevels.levelSpec(worldIdx, levelIdx);
+  var stats = { threw: false, err: null, finalStatus: null };
+  try {
+    var engine = BladeEngine.create({ mode: 'level', seed: spec.seed, viewport: { w: VIEW.w, h: VIEW.h }, level: spec });
+    var frames = Math.round(maxSeconds / DT);
+    for (var f = 0; f < frames; f++) {
+      engine.update(DT);
+      if (engine.state.status !== 'PLAY') break;
+    }
+    stats.finalStatus = engine.state.status;
+  } catch (e) { stats.threw = true; stats.err = e && e.message; }
+  return stats;
+}
+
+(function () {
+  var p = runLevelPerfect(0, 1, 60);
+  check('f4a) mode level — bot parfait monde0 nv1 -> WIN + levelWin stars=3', !p.threw
+    && p.finalStatus === 'WIN' && p.levelWinEvents === 1 && p.winStars === 3,
+    'status=' + p.finalStatus + ' levelWinEvents=' + p.levelWinEvents + ' stars=' + p.winStars
+    + (p.threw ? ' EXC=' + p.err : ''));
+
+  var q = runLevelPassive(0, 1, 60);
+  check('f4b) mode level — bot passif -> OVER', !q.threw && q.finalStatus === 'OVER',
+    'status=' + q.finalStatus + (q.threw ? ' EXC=' + q.err : ''));
 })();
 
 /* ---------------------------------------------------------------- rapport */

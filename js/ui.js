@@ -13,8 +13,26 @@ var BladeUI = (function () {
   "use strict";
 
   var TAU = Math.PI * 2;
-  var C = (typeof CONFIG !== "undefined") ? CONFIG.COLORS :
+  var baseC = (typeof CONFIG !== "undefined") ? CONFIG.COLORS :
     { BG: "#05020a", CY: "#00f0ff", MG: "#ff1fd0", DANGER: "#ff2b4a", GOLD: "#ffd000", TEXT: "#eafcff" };
+  var curTheme = null; // null = DA GRID de base ; sinon un theme de CONFIG.WORLDS
+  var C = {};
+  function computeColors() {
+    if (curTheme) {
+      C = {
+        BG: curTheme.BG, CY: curTheme.HUE_A, MG: curTheme.HUE_B,
+        DANGER: curTheme.DANGER, GOLD: baseC.GOLD, TEXT: curTheme.TEXT,
+        GRID1: curTheme.GRID1, GRID2: curTheme.GRID2
+      };
+    } else {
+      C = {
+        BG: baseC.BG, CY: baseC.CY, MG: baseC.MG, DANGER: baseC.DANGER,
+        GOLD: baseC.GOLD, TEXT: baseC.TEXT, GRID1: baseC.CY, GRID2: baseC.MG
+      };
+    }
+  }
+  computeColors();
+  function setTheme(theme) { curTheme = theme || null; computeColors(); }
 
   var cv = null, ctx = null;
   var W = 0, H = 0, DPR = 1, MIN = 0;
@@ -28,7 +46,7 @@ var BladeUI = (function () {
   var glitch = 0, redFlash = 0;
   var gridT = 0, titleT = 0;
 
-  var btnRects = { TITLE: {}, OVER: {}, WIN: {}, PLAY: {}, SHOP: {} };
+  var btnRects = { TITLE: {}, OVER: {}, WIN: {}, PLAY: {}, SHOP: {}, WORLDS: {}, LEVELS: {}, LEVELEND: {} };
 
   // ---------------------------------------------------------------- helpers
   function hexToRgba(hex, a) {
@@ -162,12 +180,12 @@ var BladeUI = (function () {
       var f = ((i / 16) + (gridT % 1)); if (f > 1) f -= 1;
       var y = vpy + (H - vpy) * f * f;
       var al = 0.10 * (1 - f);
-      ctx.strokeStyle = hexToRgba(C.CY, al.toFixed(3));
+      ctx.strokeStyle = hexToRgba(C.GRID1, al.toFixed(3));
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
     for (var j = -8; j <= 8; j++) {
       var bx = vpx + (W * 0.9) * (j / 8);
-      ctx.strokeStyle = hexToRgba(C.MG, 0.06);
+      ctx.strokeStyle = hexToRgba(C.GRID2, 0.06);
       ctx.beginPath(); ctx.moveTo(vpx, vpy); ctx.lineTo(bx, H); ctx.stroke();
     }
   }
@@ -383,10 +401,9 @@ var BladeUI = (function () {
     btnRects.PLAY.home = { x: bx, y: by, w: bw, h: bh };
   }
 
-  // ---------------------------------------------------------------- daily progress bar
-  function drawDailyBar(state) {
-    if (typeof CONFIG === "undefined" || !CONFIG.DAILY) return;
-    var goal = CONFIG.DAILY.GOAL || 1;
+  // ---------------------------------------------------------------- goal progress bar (daily / level)
+  function drawGoalBar(state, goal, label) {
+    if (!goal) return;
     var pct = Math.max(0, Math.min(1, state.score / goal));
     var barW = W * 0.86, barH = 9;
     var bx = (W - barW) / 2, by = 46;
@@ -399,7 +416,7 @@ var BladeUI = (function () {
     ctx.fillStyle = C.GOLD; ctx.shadowBlur = 10; ctx.shadowColor = C.GOLD;
     ctx.fillRect(bx, by, barW * pct, barH);
     ctx.restore();
-    txt("DÉFI " + Math.round(pct * 100) + "%", W / 2, by + barH + 13, Math.round(MIN * 0.026), C.GOLD, "center", true);
+    txt(label + " " + Math.round(pct * 100) + "%", W / 2, by + barH + 13, Math.round(MIN * 0.026), C.GOLD, "center", true);
   }
 
   // ---------------------------------------------------------------- play screen
@@ -411,7 +428,8 @@ var BladeUI = (function () {
     drawParticles();
     drawTrail();
     drawHUD(state);
-    if (mode === "daily") drawDailyBar(state);
+    if (mode === "daily" && typeof CONFIG !== "undefined" && CONFIG.DAILY) drawGoalBar(state, CONFIG.DAILY.GOAL, "DÉFI");
+    else if (mode === "level" && state.target) drawGoalBar(state, state.target, "NIVEAU");
     if (redFlash > 0) {
       ctx.save(); ctx.fillStyle = hexToRgba(C.DANGER, (redFlash * 0.7).toFixed(3)); ctx.fillRect(0, 0, W, H); ctx.restore();
     }
@@ -457,21 +475,25 @@ var BladeUI = (function () {
       var bx = colRX - bw / 2;
       var gap = H * 0.05;
       var shopBh = bh * 0.5, shopGap = gap * 0.7;
-      var totalH = bh * 2 + gap + shopGap + shopBh;
+      var levelsBh = bh * 0.5, levelsGap = gap * 0.55;
+      var totalH = bh * 2 + gap + shopGap + shopBh + levelsGap + levelsBh;
       var arcadeY = H * 0.5 - totalH / 2 - MIN * 0.02;
       var dailyY = arcadeY + bh + gap;
       var shopY = dailyY + bh + shopGap;
+      var levelsY = shopY + shopBh + levelsGap;
 
       drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
       drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
       drawMenuButton(bx, shopY, bw, shopBh, "BOUTIQUE", C.GOLD, null);
+      drawMenuButton(bx, levelsY, bw, levelsBh, "NIVEAUX", C.CY, null);
 
       btnRects.TITLE.arcade = { x: bx, y: arcadeY, w: bw, h: bh };
       btnRects.TITLE.daily = { x: bx, y: dailyY, w: bw, h: bh };
       btnRects.TITLE.shop = { x: bx, y: shopY, w: bw, h: shopBh };
+      btnRects.TITLE.levels = { x: bx, y: levelsY, w: bw, h: levelsBh };
 
       // blade selector below the buttons, arrows spread wide
-      var rowY = shopY + shopBh + MIN * 0.12;
+      var rowY = levelsY + levelsBh + MIN * 0.12;
       var b = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
       var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
@@ -498,18 +520,22 @@ var BladeUI = (function () {
       var dailyY2 = arcadeY2 + bh2 + MIN * 0.05;
       var shopBh2 = bh2 * 0.7;
       var shopY2 = dailyY2 + bh2 + MIN * 0.04;
+      var levelsBh2 = bh2 * 0.7;
+      var levelsY2 = shopY2 + shopBh2 + MIN * 0.035;
       var bx2 = W / 2 - bw2 / 2;
 
       drawMenuButton(bx2, arcadeY2, bw2, bh2, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
       drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
       drawMenuButton(bx2, shopY2, bw2, shopBh2, "BOUTIQUE", C.GOLD, null);
+      drawMenuButton(bx2, levelsY2, bw2, levelsBh2, "NIVEAUX", C.CY, null);
 
       btnRects.TITLE.arcade = { x: bx2, y: arcadeY2, w: bw2, h: bh2 };
       btnRects.TITLE.daily = { x: bx2, y: dailyY2, w: bw2, h: bh2 };
       btnRects.TITLE.shop = { x: bx2, y: shopY2, w: bw2, h: shopBh2 };
+      btnRects.TITLE.levels = { x: bx2, y: levelsY2, w: bw2, h: levelsBh2 };
 
       // blade selector
-      var rowY2 = shopY2 + shopBh2 + MIN * 0.09;
+      var rowY2 = levelsY2 + levelsBh2 + MIN * 0.07;
       var b2 = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
       var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
@@ -704,6 +730,174 @@ var BladeUI = (function () {
     }
   }
 
+  // ---------------------------------------------------------------- worlds screen
+  function drawWorldsScreen(view) {
+    btnRects.WORLDS = {};
+    var worlds = (typeof CONFIG !== "undefined" && CONFIG.WORLDS) ? CONFIG.WORLDS : [];
+    var progress = (typeof BladeMeta !== "undefined") ? BladeMeta.getLevelProgress() : { starsByWorld: [] };
+    var starsByWorld = progress.starsByWorld || [];
+    var perWorld = (typeof CONFIG !== "undefined" && CONFIG.LEVELS) ? CONFIG.LEVELS.PER_WORLD : 30;
+    var maxStars = perWorld * 3;
+    var landscape = W > H;
+    var n = worlds.length;
+
+    txt("MONDES", W / 2, H * 0.09, Math.round(MIN * 0.055), C.CY, "center", true);
+
+    var cardW, cardH, gap, x0, y0;
+    if (landscape) {
+      cardW = W * 0.30; cardH = H * 0.58; gap = W * 0.04;
+      x0 = W / 2 - (cardW * n + gap * (n - 1)) / 2; y0 = H * 0.52 - cardH / 2;
+    } else {
+      cardW = W * 0.72; cardH = H * 0.30; gap = H * 0.035;
+      x0 = W / 2 - cardW / 2; y0 = H * 0.22;
+    }
+
+    for (var i = 0; i < n; i++) {
+      var w = worlds[i];
+      var cx = landscape ? x0 + i * (cardW + gap) : x0;
+      var cy = landscape ? y0 : y0 + i * (cardH + gap);
+      var stars = starsByWorld[i] || 0;
+      var gate = (typeof BladeLevels !== "undefined") ? BladeLevels.worldGate(i) : 0;
+      var unlocked = i === 0 || (starsByWorld[i - 1] || 0) >= gate;
+      var glow = (w.theme && w.theme.HUE_A) || C.CY;
+
+      ctx.save();
+      if (w.theme) { ctx.globalAlpha = 0.16; ctx.fillStyle = w.theme.BG; ctx.fillRect(cx, cy, cardW, cardH); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = unlocked ? glow : "#555"; ctx.lineWidth = 3;
+      ctx.shadowBlur = unlocked ? 16 : 0; ctx.shadowColor = glow;
+      ctx.strokeRect(cx, cy, cardW, cardH);
+      ctx.restore();
+
+      txt(w.name || ("MONDE " + (i + 1)), cx + cardW / 2, cy + cardH * 0.34, Math.round(MIN * 0.042), unlocked ? glow : "#888", "center", true);
+      txt(stars + " / " + maxStars + " ★", cx + cardW / 2, cy + cardH * 0.55, Math.round(MIN * 0.03), C.GOLD, "center", true);
+      if (!unlocked) {
+        txt("🔒", cx + cardW / 2, cy + cardH * 0.72, Math.round(MIN * 0.05), "#888", "center", false);
+        txt(gate + "★ requis", cx + cardW / 2, cy + cardH * 0.85, Math.round(MIN * 0.026), C.DANGER, "center", false);
+      }
+      btnRects.WORLDS["world" + i] = { x: cx, y: cy, w: cardW, h: cardH };
+    }
+
+    var backW = landscape ? W * 0.16 : MIN * 0.34, backH = landscape ? H * 0.10 : MIN * 0.08;
+    var backX = W / 2 - backW / 2, backY = H * 0.90 - backH;
+    drawMenuButton(backX, backY, backW, backH, "RETOUR", C.MG, null);
+    btnRects.WORLDS.back = { x: backX, y: backY, w: backW, h: backH };
+  }
+
+  // ---------------------------------------------------------------- levels screen (grille 6x5)
+  function drawLevelsScreen(view) {
+    btnRects.LEVELS = {};
+    var menu = view.menu || {};
+    var meta = view.meta || {};
+    var worldIdx = menu.worldIndex || 0;
+    var worlds = (typeof CONFIG !== "undefined" && CONFIG.WORLDS) ? CONFIG.WORLDS : [];
+    var world = worlds[worldIdx] || { id: "inferno", name: "NIVEAUX" };
+    var perWorld = (typeof CONFIG !== "undefined" && CONFIG.LEVELS) ? CONFIG.LEVELS.PER_WORLD : 30;
+    var bossLevels = (typeof CONFIG !== "undefined" && CONFIG.LEVELS) ? CONFIG.LEVELS.BOSS_LEVELS : [];
+    var progress = (typeof BladeMeta !== "undefined") ? BladeMeta.getLevelProgress() : { stars: {}, starsByWorld: [] };
+    var shards = (typeof meta.shards === "number") ? meta.shards : 0;
+    var worldStars = progress.starsByWorld[worldIdx] || 0;
+
+    txt(world.name || "NIVEAUX", W / 2, H * 0.075, Math.round(MIN * 0.045), C.CY, "center", true);
+    txt(shards + " " + currencySymbol(), W - 18, 24, Math.round(MIN * 0.028), C.GOLD, "right", true);
+
+    var cols = 6, rows = 5;
+    var gridW = W * 0.88, gridH = H * 0.68;
+    var gx = (W - gridW) / 2, gy = H * 0.15;
+    var cw = gridW / cols, ch = gridH / rows;
+    var pad = Math.min(cw, ch) * 0.10;
+
+    for (var lvl = 1; lvl <= perWorld; lvl++) {
+      var idx = lvl - 1;
+      var col = idx % cols, row = Math.floor(idx / cols);
+      var cx = gx + col * cw + pad / 2, cy = gy + row * ch + pad / 2;
+      var cw2 = cw - pad, ch2 = ch - pad;
+      var key = world.id + "-" + lvl;
+      var stars = progress.stars ? (progress.stars[key] || 0) : 0;
+      var prevStars = lvl === 1 ? 1 : (progress.stars ? (progress.stars[world.id + "-" + (lvl - 1)] || 0) : 0);
+      var gate = (typeof BladeLevels !== "undefined") ? BladeLevels.levelGate(worldIdx, lvl) : 0;
+      var unlocked = lvl === 1 || (prevStars > 0 && worldStars >= gate);
+      var isBoss = bossLevels && bossLevels.indexOf(lvl) !== -1;
+      var cellCol = unlocked ? (isBoss ? C.GOLD : C.CY) : "#555";
+
+      ctx.save();
+      ctx.strokeStyle = cellCol; ctx.lineWidth = 2;
+      ctx.shadowBlur = unlocked ? 10 : 0; ctx.shadowColor = cellCol;
+      ctx.strokeRect(cx, cy, cw2, ch2);
+      ctx.restore();
+
+      txt(String(lvl), cx + cw2 / 2, cy + ch2 * 0.36, Math.round(Math.min(cw2, ch2) * 0.32), unlocked ? C.TEXT : "#777", "center", false);
+      if (isBoss) txt("⬢", cx + cw2 * 0.84, cy + ch2 * 0.18, Math.round(Math.min(cw2, ch2) * 0.24), C.GOLD, "center", true);
+
+      if (unlocked) {
+        var starStr = "";
+        for (var s = 0; s < 3; s++) starStr += (s < stars ? "★" : "☆");
+        txt(starStr, cx + cw2 / 2, cy + ch2 * 0.74, Math.round(Math.min(cw2, ch2) * 0.20), C.GOLD, "center", false);
+      } else if (gate > 0 && worldStars < gate) {
+        txt(gate + "★", cx + cw2 / 2, cy + ch2 * 0.74, Math.round(Math.min(cw2, ch2) * 0.20), C.DANGER, "center", false);
+      } else {
+        txt("🔒", cx + cw2 / 2, cy + ch2 * 0.74, Math.round(Math.min(cw2, ch2) * 0.22), "#777", "center", false);
+      }
+      btnRects.LEVELS["lvl" + lvl] = { x: cx, y: cy, w: cw2, h: ch2 };
+    }
+
+    var backW = W * 0.18, backH = H * 0.08;
+    var backX = W / 2 - backW / 2, backY = H * 0.90;
+    drawMenuButton(backX, backY, backW, backH, "RETOUR", C.MG, null);
+    btnRects.LEVELS.back = { x: backX, y: backY, w: backW, h: backH };
+  }
+
+  // ---------------------------------------------------------------- level-end screen
+  function drawLevelEndScreen(view) {
+    btnRects.LEVELEND = {};
+    var menu = view.menu || {};
+    var res = menu.levelResult || { success: false, stars: 0, score: 0, target: 0, shardsEarned: 0, hasNext: false };
+    var landscape = W > H;
+    var tx = landscape ? W * 0.07 : W / 2;
+    var align = landscape ? "left" : "center";
+
+    ctx.save(); ctx.fillStyle = "rgba(5,2,10,0.62)"; ctx.fillRect(0, 0, W, H); ctx.restore();
+
+    if (res.success) {
+      txt("NIVEAU RÉUSSI", tx, H * 0.16, Math.round(MIN * 0.055), C.GOLD, align, true);
+      var starStr = "";
+      for (var s = 0; s < 3; s++) starStr += (s < res.stars ? "★" : "☆");
+      txt(starStr, tx, H * 0.30, Math.round(MIN * 0.09), C.GOLD, align, true);
+    } else {
+      txt("ÉCHEC", tx, H * 0.16, Math.round(MIN * 0.065), C.DANGER, align, true);
+    }
+    txt("SCORE " + res.score + " / " + res.target, tx, H * 0.44, Math.round(MIN * 0.042), C.CY, align, true);
+    if (res.shardsEarned > 0) {
+      txt("+" + res.shardsEarned + " " + currencySymbol(), tx, H * 0.52, Math.round(MIN * 0.030), C.GOLD, align, true);
+    }
+
+    var buttons = [];
+    if (res.success && res.hasNext) buttons.push({ key: "next", label: "SUIVANT", col: C.CY });
+    buttons.push({ key: "replay", label: "REJOUER", col: C.MG });
+    buttons.push({ key: "back", label: "NIVEAUX", col: C.GOLD });
+
+    var bw, bh, gap, i;
+    if (landscape) {
+      bw = W * 0.26; bh = H * 0.15; gap = H * 0.04;
+      var totalH = buttons.length * bh + (buttons.length - 1) * gap;
+      var y0 = H * 0.5 - totalH / 2;
+      var rx = W * 0.80 - bw / 2;
+      for (i = 0; i < buttons.length; i++) {
+        var by = y0 + i * (bh + gap);
+        drawMenuButton(rx, by, bw, bh, buttons[i].label, buttons[i].col, null);
+        btnRects.LEVELEND[buttons[i].key] = { x: rx, y: by, w: bw, h: bh };
+      }
+    } else {
+      bw = MIN * 0.5; bh = MIN * 0.095; gap = MIN * 0.025;
+      var y0p = H * 0.60;
+      var bx = W / 2 - bw / 2;
+      for (i = 0; i < buttons.length; i++) {
+        var byp = y0p + i * (bh + gap);
+        drawMenuButton(bx, byp, bw, bh, buttons[i].label, buttons[i].col, null);
+        btnRects.LEVELEND[buttons[i].key] = { x: bx, y: byp, w: bw, h: bh };
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- orientation overlay
   function drawPortraitOverlay(dt) {
     ctx.save();
@@ -747,6 +941,13 @@ var BladeUI = (function () {
       drawWinScreen(view);
     } else if (view.screen === "SHOP") {
       drawShopScreen(view);
+    } else if (view.screen === "WORLDS") {
+      drawWorldsScreen(view);
+    } else if (view.screen === "LEVELS") {
+      drawLevelsScreen(view);
+    } else if (view.screen === "LEVELEND") {
+      drawPlay(view.engineState, view.mode);
+      drawLevelEndScreen(view);
     } else {
       drawPlay(view.engineState, view.mode);
       drawHomeButton();
@@ -773,7 +974,8 @@ var BladeUI = (function () {
     strokePoint: strokePoint,
     strokeEnd: strokeEnd,
     setBlade: setBlade,
-    hitTest: hitTest
+    hitTest: hitTest,
+    setTheme: setTheme
   };
 })();
 

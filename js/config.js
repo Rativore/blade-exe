@@ -18,7 +18,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.0',             // affichée à l'écran titre — à incrémenter
+  VERSION: '2.1',             // affichée à l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -90,6 +90,29 @@ var CONFIG = {
     ARCADE_RATE: 1000,        // arcade : floor(score / RATE) éclats par partie
   },
 
+  /* ------------------------------------------------ mode NIVEAUX */
+  LEVELS: {
+    PER_WORLD: 30,
+    // étoiles d'un niveau réussi = vies restantes (3★ = zéro vie perdue)
+    GATES: { 11: 15, 21: 35 },  // porte au niveau n : étoiles requises DANS ce monde
+    WORLD2_STARS: 55,           // étoiles du monde 1 requises pour ouvrir le monde 2
+    REWARD_FIRST: 20,           // ◆ première réussite d'un niveau
+    REWARD_PER_STAR: 10,        // ◆ par étoile jamais obtenue sur ce niveau
+    BOSS_LEVELS: [10, 20, 30],  // niveaux boss (récompenses ×2)
+    BOSS_REWARD_MULT: 2,
+  },
+
+  // Chaque monde : DA (thème appliqué par BladeUI en jeu et sur ses écrans)
+  // + musique dédiée (kind BladeAudio). L'arcade/défi gardent la DA GRID de base.
+  WORLDS: [
+    { id: 'inferno', name: 'INFERNO.SYS', music: 'inferno',
+      theme: { BG: '#0a0202', GRID1: '#ff5a00', GRID2: '#ff2b4a',
+               HUE_A: '#ff7a00', HUE_B: '#ff2b4a', DANGER: '#ffe600', TEXT: '#fff0e0' } },
+    { id: 'toxic', name: 'TOXIC.SECTOR', music: 'toxic',
+      theme: { BG: '#020a02', GRID1: '#39ff14', GRID2: '#eaff00',
+               HUE_A: '#39ff14', HUE_B: '#eaff00', DANGER: '#ff1fd0', TEXT: '#eaffe0' } },
+  ],
+
   /* ------------------------------------------------ lames cosmétiques (trail) */
   // unlock.type: 'default' | 'shop' (achat en éclats, price) | 'streak'
   // (série quotidienne — trophées NON achetables). Ordre = ordre d'affichage.
@@ -112,10 +135,18 @@ var CONFIG = {
  * ============================================================================
  *
  * ---------------------------------------------------------------- engine.js
- * BladeEngine.create({ mode, seed, viewport: {w, h} }) → engine
- *   mode : 'arcade' | 'daily' ; seed : entier (déterminisme total du run :
+ * BladeEngine.create({ mode, seed, viewport: {w, h}, level? }) → engine
+ *   mode : 'arcade' | 'daily' | 'level' ; seed : entier (déterminisme total :
  *   même seed + mêmes appels ⇒ même partie ; RNG interne mulberry32, jamais
  *   Math.random dans engine.js).
+ *   mode 'level' : opts.level = { target, grow, maxObjs, interval, batch,
+ *   virusP, rotSpeed, dirs, seqLen, bossAt } (spec de BladeLevels.levelSpec) —
+ *   paramètres de spawn FIXES (waveFor ignoré, pas d'événements 'wave') ;
+ *   bossAt = null ou fraction (ex 0.6) : UN boss spawn quand score >=
+ *   bossAt×target (bossSpec(0), mêmes règles) ; victoire quand score >=
+ *   target → status 'WIN', event {type:'levelWin', score, maxCombo,
+ *   stars: lives} (les vies restantes = étoiles) ; défaite = 'over' normal.
+ *   state gagne target (mode level, sinon null) pour la barre de progression.
  * engine.state  (lecture seule pour UI/tests) :
  *   { status:'PLAY'|'OVER'|'WIN',      // 'WIN' : mode daily uniquement, score >= DAILY.GOAL
  *     score, lives, combo, mult, maxCombo,
@@ -174,6 +205,18 @@ var CONFIG = {
  * BladeLevels.bossSpec(bossCount) → { seqLen: min(3 + bossCount, 6), growTime: BOSS.GROW_TIME }
  * BladeLevels.dailySeed(dateStr) → entier déterministe depuis 'YYYY-MM-DD'
  *   (hash simple, stable entre sessions et machines)
+ * --- mode NIVEAUX ---
+ * BladeLevels.levelSpec(worldIdx 0|1, levelIdx 1..30) → { seed, target, grow,
+ *   maxObjs, interval, batch, virusP, rotSpeed, dirs, seqLen, bossAt, boss }
+ *   Courbe PARAMÉTRIQUE (pas 60 configs à la main) : monde 1 — target 300 →
+ *   ~1500, grow 2.6 → 1.3, virus dès nv 4, rotation dès nv 12, double coupe
+ *   dès nv 18 ; monde 2 — reprend ~nv 12 du monde 1 en plus dense et pousse
+ *   plus loin (virusP jusqu'à 0.40, seqLen 2 fréquent). boss = levelIdx ∈
+ *   CONFIG.LEVELS.BOSS_LEVELS (bossAt 0.6, target +30 %), sinon bossAt null.
+ *   seed = hash(worldId + '-' + levelIdx) déterministe.
+ * BladeLevels.levelGate(worldIdx, levelIdx) → étoiles requises dans ce monde
+ *   (CONFIG.LEVELS.GATES, 0 sinon) ; BladeLevels.worldGate(worldIdx) → étoiles
+ *   du monde précédent requises (0 pour le monde 0, WORLD2_STARS pour le 1).
  *
  * ------------------------------------------------------------------ meta.js
  * BladeMeta.load() → save (crée les défauts si absent ; localStorage
@@ -198,6 +241,16 @@ var CONFIG = {
  *   - déverrouille les lames 'streak' dont la condition est atteinte.
  * BladeMeta.buyBlade(id) → { ok:bool, shards }  — refus si pas type 'shop',
  *   déjà possédée, ou shards < price ; sinon débite, ajoute à unlocked, persiste.
+ * --- mode NIVEAUX ---
+ * save.levelStars = { 'inferno-1': 2, ... }  (0 étoiles = jamais réussi ;
+ *   migration : défaut {}).
+ * BladeMeta.recordLevel({worldId, levelIdx, stars, score}) → { shardsEarned,
+ *   improved:bool, shards } — étoiles conservées au max historique ;
+ *   éclats = REWARD_FIRST (si première réussite) + REWARD_PER_STAR × (étoiles
+ *   nouvelles au-delà du max précédent), le tout × BOSS_REWARD_MULT si niveau
+ *   boss ; rejouer sans améliorer = 0 ; persiste.
+ * BladeMeta.getLevelProgress() → { stars:{clé:étoiles}, starsByWorld:[n0,n1],
+ *   totalStars } (calculé depuis save.levelStars et CONFIG.WORLDS).
  * BladeMeta.getBlades() → [{...blade, unlocked:bool, equipped:bool}]
  * BladeMeta.equipBlade(id) → bool (refus si verrouillée)
  * BladeMeta.todayStr(d?) → 'YYYY-MM-DD' locale
@@ -212,6 +265,11 @@ var CONFIG = {
  * BladeAudio.startMusic(kind) / BladeAudio.stopMusic()
  *   kind 'menu' : nappe synthwave calme (~90 BPM, pads détunés + arpège lent +
  *   sub discret, boucle 8 mesures) pour l'écran titre.
+ *   kind 'inferno' : industriel agressif ~150 BPM — kick lourd, basse saw
+ *   distordue (waveshaper), hats métalliques, stabs graves (monde INFERNO.SYS).
+ *   kind 'toxic' : acid ~140 BPM — basse résonante type 303 (lowpass Q élevé
+ *   balayé), offbeat hats, blips mouillés (monde TOXIC.SECTOR).
+ *   setMusicIntensity s'applique à 'game', 'inferno' et 'toxic' (densité+filtre).
  *   kind 'game' (défaut si omis) : boucle hyperpop/glitchcore : ~160 BPM, lead saw
  *   arpégé (gamme mineure), sub bass avec pompe side-chain, hi-hats avec
  *   rafales stutter 1/32, snare claps, glitchs de pitch occasionnels —
@@ -226,7 +284,24 @@ var CONFIG = {
  * BladeUI.init(canvas)         // garde ctx, gère DPR (cap 2) — reprendre resize() maquette
  * BladeUI.resize()             // recalcule W,H,MIN ; retourne {w,h}
  * BladeUI.render(dt, view)     // dessine une frame complète ; view =
- *   { screen:'TITLE'|'PLAY'|'OVER'|'WIN'|'SHOP', engineState|null, meta, menu, mode }
+ *   { screen:'TITLE'|'PLAY'|'OVER'|'WIN'|'SHOP'|'WORLDS'|'LEVELS'|'LEVELEND',
+ *     engineState|null, meta, menu, mode }
+ *   --- mode NIVEAUX ---
+ *   BladeUI.setTheme(theme|null) : null = DA GRID de base (arcade/défi/menus) ;
+ *   un theme de CONFIG.WORLDS = fond, grille, teintes fragments (HUE_A/HUE_B
+ *   remplacent CY/MG), virus (DANGER), textes HUD — appliqué pendant tout le
+ *   run ET sur les écrans WORLDS/LEVELS/LEVELEND du monde sélectionné.
+ *   WORLDS : 2 cartes (nom, DA en fond, étoiles xx/90, verrou + « 55★ requis »
+ *   si fermé), RETOUR → btnRects.WORLDS = {world0, world1, back}.
+ *   LEVELS : grille 6×5 du monde menu.worldIndex — chaque case : numéro,
+ *   0-3★, verrou (niveau précédent non fini OU porte d'étoiles non atteinte,
+ *   afficher « n★ » requis sur les portes), boss marqués ⬢ ; solde ◆ ; RETOUR.
+ *   btnRects.LEVELS = {lvl1..lvl30, back}.
+ *   LEVELEND (réussite OU échec de niveau) : étoiles obtenues (grosses, la
+ *   version échec affiche ÉCHEC + objectif), score/objectif, +X ◆, boutons
+ *   SUIVANT (si réussite et suivant jouable) / REJOUER / NIVEAUX →
+ *   btnRects.LEVELEND = {next, replay, back}.
+ *   PLAY en mode level : barre de progression score/target (comme le défi).
  *   BOUTIQUE (screen SHOP) : solde ◆ en haut, carrousel de lames (une à la
  *   fois, ◀ ▶) avec aperçu de la traînée en couleur, nom, prix ou état
  *   (POSSÉDÉE / ÉQUIPÉE / RÉCOMPENSE DE SÉRIE x J), gros bouton contextuel
@@ -256,8 +331,9 @@ var CONFIG = {
  * lames débloquées ce run, REJOUER + MENU. Boutons = zones cliquables que
  * BladeUI.hitTest(x,y,screen) → 'arcade'|'daily'|'replay'|'menu'|'mute'|
  * 'bladePrev'|'bladeNext'|'home'|'shop'|'shopPrev'|'shopNext'|'buy'|'equip'|
- * 'back'|null (main.js route les taps ; écran SHOP : état du carrousel dans
- * menu.shopIndex, actions buy/equip sur la lame menu.blades[menu.shopIndex]).
+ * 'back'|'levels'|'world0'|'world1'|'lvl1'..'lvl30'|'next'|null (main.js
+ * route les taps ; écran SHOP : carrousel dans menu.shopIndex, buy/equip sur
+ * menu.blades[menu.shopIndex] ; écrans NIVEAUX : menu.worldIndex/levelIndex).
  * PLAY : bouton ⌂ ACCUEIL discret en haut à gauche, SOUS le score (dans la
  * zone HUD protégée par SPAWN_MARGIN_TOP) → btnRects.PLAY.home ; permet de
  * quitter la partie en cours pour revenir au menu.
@@ -283,6 +359,14 @@ var CONFIG = {
  * refus ; 'equip' → equipBlade + setBlade ; menu.shopIndex pour le carrousel.
  * Fin de run : menu.shardsEarnedThisRun = recordRun().shardsEarned (affiché
  * sur OVER/WIN) ; musique menu conservée sur SHOP.
+ * NIVEAUX : bouton 'levels' au TITLE → WORLDS ; 'world0/world1' (si ouvert) →
+ * setTheme(monde) + LEVELS ; 'lvlN' (si déverrouillé : niveau précédent fini
+ * ET porte d'étoiles atteinte) → engine mode 'level' avec levelSpec, musique
+ * du monde (startMusic(world.music)), menu.worldIndex/menu.levelIndex posés.
+ * Event 'levelWin' → recordLevel + écran LEVELEND (réussite) ; event 'over'
+ * en mode level → LEVELEND (échec, 0★, pas de recordLevel). 'next' → niveau
+ * suivant ; 'back' → LEVELS ; retour au TITLE = setTheme(null) + musique menu.
+ * Le bouton ⌂ en mode level → LEVELS (pas TITLE), sans recordLevel.
  * ========================================================================== */
 
 if (typeof window !== 'undefined') window.CONFIG = CONFIG;

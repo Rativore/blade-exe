@@ -35,6 +35,7 @@ var BladeMeta = (function () {
       shards: 0,
       blades: { unlocked: ['neon'], equipped: 'neon' },
       daily: { lastDate: null, streak: 0, scores: {} },
+      levelStars: {},
     };
   }
 
@@ -62,6 +63,8 @@ var BladeMeta = (function () {
           save.daily.streak = typeof parsed.daily.streak === 'number' ? parsed.daily.streak : 0;
           save.daily.scores = parsed.daily.scores || {};
         }
+        // migration : anciennes sauvegardes sans levelStars -> {} (défaut déjà posé)
+        save.levelStars = (parsed.levelStars && typeof parsed.levelStars === 'object') ? parsed.levelStars : save.levelStars;
       } catch (e) {
         save = defaults();
       }
@@ -170,6 +173,55 @@ var BladeMeta = (function () {
     return { newBest: newBest, unlocked: unlocked, streak: s.daily.streak, shardsEarned: shardsEarned, shards: s.shards };
   }
 
+  // --- mode NIVEAUX ---------------------------------------------------------
+  // BladeMeta.recordLevel({worldId, levelIdx, stars, score}) -> { shardsEarned,
+  //   improved, shards } : étoiles conservées au max historique ; éclats =
+  //   REWARD_FIRST (si première réussite) + REWARD_PER_STAR × étoiles nouvelles
+  //   au-delà du max précédent, le tout × BOSS_REWARD_MULT si niveau boss ;
+  //   rejouer sans améliorer le nombre d'étoiles = 0.
+  function recordLevel(opts) {
+    var s = get();
+    opts = opts || {};
+    var worldId = opts.worldId;
+    var levelIdx = opts.levelIdx;
+    var stars = opts.stars || 0;
+    var key = worldId + '-' + levelIdx;
+
+    var prevStars = s.levelStars[key] || 0;
+    var improved = stars > prevStars;
+    var shardsEarned = 0;
+
+    if (improved) {
+      var isFirstClear = prevStars === 0;
+      var starDelta = stars - prevStars;
+      var reward = (isFirstClear ? CONFIG.LEVELS.REWARD_FIRST : 0)
+        + CONFIG.LEVELS.REWARD_PER_STAR * starDelta;
+      var isBoss = CONFIG.LEVELS.BOSS_LEVELS.indexOf(levelIdx) !== -1;
+      if (isBoss) reward *= CONFIG.LEVELS.BOSS_REWARD_MULT;
+      shardsEarned = reward;
+      s.levelStars[key] = stars;
+    }
+
+    s.shards += shardsEarned;
+    persist();
+
+    return { shardsEarned: shardsEarned, improved: improved, shards: s.shards };
+  }
+
+  // BladeMeta.getLevelProgress() -> { stars, starsByWorld:[n0,n1], totalStars }
+  function getLevelProgress() {
+    var s = get();
+    var starsByWorld = CONFIG.WORLDS.map(function (w) {
+      var sum = 0;
+      for (var i = 1; i <= CONFIG.LEVELS.PER_WORLD; i++) {
+        sum += s.levelStars[w.id + '-' + i] || 0;
+      }
+      return sum;
+    });
+    var totalStars = starsByWorld.reduce(function (a, b) { return a + b; }, 0);
+    return { stars: s.levelStars, starsByWorld: starsByWorld, totalStars: totalStars };
+  }
+
   function buyBlade(id) {
     var s = get();
     var blade = null;
@@ -215,6 +267,8 @@ var BladeMeta = (function () {
     equipBlade: equipBlade,
     buyBlade: buyBlade,
     todayStr: todayStr,
+    recordLevel: recordLevel,
+    getLevelProgress: getLevelProgress,
   };
 
   return BladeMeta;
