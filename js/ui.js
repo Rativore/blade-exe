@@ -385,6 +385,9 @@ var BladeUI = (function () {
     txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", W / 2, H * 0.38, Math.round(MIN * 0.030), "#cfefff", "center", false);
     ctx.restore();
 
+    var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
+    txt("VERSION " + verMid, W / 2, H * 0.425, Math.round(MIN * 0.042), C.GOLD, "center", true);
+
     var meta = view.meta || { best: 0, daily: { streak: 0 } };
     var menu = view.menu || { blades: [], bladeIndex: 0, muted: false };
 
