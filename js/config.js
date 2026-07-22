@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.16',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.17',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -144,13 +144,15 @@ var CONFIG = {
   THEMES: [
     { id: 'grid',   name: 'GRID',   price: 0,
       theme: null }, // null = DA de base (CONFIG.COLORS)
-    { id: 'sakura', name: 'SAKURA', price: 3000,
+    // ⚠️ PHASE DE TEST (2026-07-23) : prix à 0 pour que le client essaie les
+    // thèmes. Prix définitifs à rétablir : SAKURA 3000, MIDAS 6000, VOID 12000.
+    { id: 'sakura', name: 'SAKURA', price: 0,
       theme: { BG: '#0a0308', GRID1: '#ff8ac2', GRID2: '#ffffff',
                HUE_A: '#ff8ac2', HUE_B: '#ffffff', DANGER: '#7dff00', TEXT: '#ffeef7' } },
-    { id: 'midas',  name: 'MIDAS',  price: 6000,
+    { id: 'midas',  name: 'MIDAS',  price: 0,
       theme: { BG: '#0a0800', GRID1: '#ffd000', GRID2: '#ff9500',
                HUE_A: '#ffd000', HUE_B: '#ff9500', DANGER: '#00f0ff', TEXT: '#fff8dc' } },
-    { id: 'void',   name: 'VOID',   price: 12000,
+    { id: 'void',   name: 'VOID',   price: 0,
       theme: { BG: '#000000', GRID1: '#ffffff', GRID2: '#7a7a7a',
                HUE_A: '#ffffff', HUE_B: '#9adcff', DANGER: '#ff2b4a', TEXT: '#ffffff' } },
   ],

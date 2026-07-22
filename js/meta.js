@@ -293,12 +293,21 @@ var BladeMeta = (function () {
     return { ok: true, shards: s.shards };
   }
 
+  // Un thème à price 0 est possédé d'office (GRID, et tout thème passé en
+  // gratuit pour une phase de test).
+  function themeFreeById(id) {
+    for (var i = 0; i < CONFIG.THEMES.length; i++) {
+      if (CONFIG.THEMES[i].id === id) return CONFIG.THEMES[i].price === 0;
+    }
+    return false;
+  }
+
   // BladeMeta.getThemes() -> [{...CONFIG.THEMES[i], unlocked, equipped}]
   function getThemes() {
     var s = get();
     return CONFIG.THEMES.map(function (t) {
       return Object.assign({}, t, {
-        unlocked: s.themes.unlocked.indexOf(t.id) !== -1,
+        unlocked: t.price === 0 || s.themes.unlocked.indexOf(t.id) !== -1,
         equipped: s.themes.equipped === t.id,
       });
     });
@@ -307,7 +316,7 @@ var BladeMeta = (function () {
   // BladeMeta.equipTheme(id) -> bool (refus si non possédé)
   function equipTheme(id) {
     var s = get();
-    if (s.themes.unlocked.indexOf(id) === -1) return false;
+    if (!themeFreeById(id) && s.themes.unlocked.indexOf(id) === -1) return false;
     s.themes.equipped = id;
     persist();
     return true;

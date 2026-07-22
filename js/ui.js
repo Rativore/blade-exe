@@ -493,6 +493,8 @@ var BladeUI = (function () {
     if (sub) txt(sub, x + w / 2, y + h * 0.78, Math.round(MIN * 0.026), col, "center", false);
   }
   function drawTitleScreen(dt, view) {
+    delete btnRects.TITLE.bladePrev; // sélecteur retiré du titre — purge des zones cliquables
+    delete btnRects.TITLE.bladeNext;
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
     var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
     var meta = view.meta || { best: 0, daily: { streak: 0 }, shards: 0 };
@@ -544,18 +546,7 @@ var BladeUI = (function () {
       btnRects.TITLE.levels = { x: bx, y: shopY, w: bw, h: shopBh };
       btnRects.TITLE.shop = { x: bx, y: levelsY, w: bw, h: levelsBh };
 
-      // blade selector below the buttons, arrows spread wide
-      var rowY = levelsY + levelsBh + MIN * 0.12;
-      var b = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
-      var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
-      txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
-
-      var prevX = colRX - bw * 0.58, nextX = colRX + bw * 0.58;
-      var arrowHalf = MIN * 0.06;
-      txt("◀", prevX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
-      txt("▶", nextX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
-      btnRects.TITLE.bladePrev = { x: prevX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
-      btnRects.TITLE.bladeNext = { x: nextX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+      // (sélecteur de sabre retiré du titre — l'équipement se fait en boutique)
     } else {
       // ---- portrait (fenêtre PC) : disposition centrée d'origine ----
       txt("BLADE", W / 2 + jit, H * 0.20, Math.round(MIN * 0.13), C.CY, "center", true);
@@ -590,18 +581,7 @@ var BladeUI = (function () {
       btnRects.TITLE.levels = { x: bx2, y: shopY2, w: bw2, h: shopBh2 };
       btnRects.TITLE.shop = { x: bx2, y: levelsY2, w: bw2, h: levelsBh2 };
 
-      // blade selector
-      var rowY2 = levelsY2 + levelsBh2 + MIN * 0.07;
-      var b2 = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
-      var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
-      txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
-
-      var prevX2 = W / 2 - bw2 * 0.42, nextX2 = W / 2 + bw2 * 0.42;
-      var arrowHalf2 = MIN * 0.05;
-      txt("◀", prevX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
-      txt("▶", nextX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
-      btnRects.TITLE.bladePrev = { x: prevX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
-      btnRects.TITLE.bladeNext = { x: nextX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
+      // (sélecteur de sabre retiré du titre — l'équipement se fait en boutique)
     }
 
     // mute toggle — en bas à GAUCHE au-dessus de la version (le haut droit est

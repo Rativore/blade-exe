@@ -573,18 +573,34 @@ function runLevelPassive(worldIdx, levelIdx, maxSeconds) {
 })();
 
 /* ==================================================== CASE h2 : buyTheme */
+// Robuste à la phase de test « thèmes gratuits » : on cherche un thème payant ;
+// s'il n'y en a aucun (tous à price 0), on vérifie qu'ils sont possédés d'office.
+function firstPaidTheme() {
+  for (var i = 0; i < CONFIG.THEMES.length; i++) {
+    if (CONFIG.THEMES[i].price > 0) return CONFIG.THEMES[i];
+  }
+  return null;
+}
 (function () {
   var M = freshMeta();
-  var refuseNoMoney = M.buyTheme('sakura'); // shards=0, price 3000
-  var funded = M.addShards(3000);
-  var buyOk = M.buyTheme('sakura'); // price 3000 -> ok, reste 0
-  var buyAgain = M.buyTheme('sakura'); // déjà possédé -> refus
+  var paid = firstPaidTheme();
+  if (!paid) {
+    var allOwned = M.getThemes().every(function (t) { return t.unlocked === true; });
+    var buyGrid0 = M.buyTheme('grid');
+    check('h2) thèmes gratuits (phase de test) — tous possédés d\'office, price 0 jamais achetable',
+      allOwned && buyGrid0.ok === false, 'allOwned=' + allOwned + ' buyGrid=' + buyGrid0.ok);
+    return;
+  }
+  var refuseNoMoney = M.buyTheme(paid.id); // shards=0
+  var funded = M.addShards(paid.price);
+  var buyOk = M.buyTheme(paid.id); // -> ok, reste 0
+  var buyAgain = M.buyTheme(paid.id); // déjà possédé -> refus
   var buyGrid = M.buyTheme('grid'); // price 0 -> jamais achetable -> refus
-  check('h2) buyTheme — refus solde insuffisant, achat SAKURA ok (débite 3000), re-achat refusé, achat grid refusé',
+  check('h2) buyTheme — refus solde insuffisant, achat ' + paid.name + ' ok (débite ' + paid.price + '), re-achat refusé, achat grid refusé',
     refuseNoMoney.ok === false && refuseNoMoney.shards === 0
-    && funded === 3000
+    && funded === paid.price
     && buyOk.ok === true && buyOk.shards === 0
-    && M.getThemes().filter(function (t) { return t.id === 'sakura'; })[0].unlocked === true
+    && M.getThemes().filter(function (t) { return t.id === paid.id; })[0].unlocked === true
     && buyAgain.ok === false && buyAgain.shards === 0
     && buyGrid.ok === false && buyGrid.shards === 0,
     'refuse=' + refuseNoMoney.ok + ' buyOk=' + buyOk.ok + '/' + buyOk.shards
@@ -594,10 +610,17 @@ function runLevelPassive(worldIdx, levelIdx, maxSeconds) {
 /* ==================================================== CASE h3 : equipTheme */
 (function () {
   var M = freshMeta();
-  var refuse = M.equipTheme('sakura'); // non possédé
-  M.addShards(3000);
-  M.buyTheme('sakura');
-  var accept = M.equipTheme('sakura'); // possédé après achat
+  var paid = firstPaidTheme();
+  if (!paid) {
+    var acceptFree = M.equipTheme('void'); // gratuit en phase de test -> équipable direct
+    check('h3) equipTheme — thème gratuit équipable directement (phase de test)', acceptFree === true,
+      'equip void=' + acceptFree);
+    return;
+  }
+  var refuse = M.equipTheme(paid.id); // non possédé
+  M.addShards(paid.price);
+  M.buyTheme(paid.id);
+  var accept = M.equipTheme(paid.id); // possédé après achat
   check('h3) equipTheme — refus si non possédé, ok après achat', refuse === false && accept === true,
     'sakura(non possédé)=' + refuse + ' sakura(après achat)=' + accept);
 })();
