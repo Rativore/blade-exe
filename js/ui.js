@@ -492,13 +492,13 @@ var BladeUI = (function () {
       } else {
         drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
       }
-      drawMenuButton(bx, shopY, bw, shopBh, "BOUTIQUE", C.GOLD, null);
-      drawMenuButton(bx, levelsY, bw, levelsBh, "NIVEAUX", C.CY, null);
+      drawMenuButton(bx, shopY, bw, shopBh, "NIVEAUX", C.CY, null);
+      drawMenuButton(bx, levelsY, bw, levelsBh, "BOUTIQUE", C.GOLD, null);
 
       btnRects.TITLE.arcade = { x: bx, y: arcadeY, w: bw, h: bh };
       btnRects.TITLE.daily = { x: bx, y: dailyY, w: bw, h: bh };
-      btnRects.TITLE.shop = { x: bx, y: shopY, w: bw, h: shopBh };
-      btnRects.TITLE.levels = { x: bx, y: levelsY, w: bw, h: levelsBh };
+      btnRects.TITLE.levels = { x: bx, y: shopY, w: bw, h: shopBh };
+      btnRects.TITLE.shop = { x: bx, y: levelsY, w: bw, h: levelsBh };
 
       // blade selector below the buttons, arrows spread wide
       var rowY = levelsY + levelsBh + MIN * 0.12;
@@ -538,13 +538,13 @@ var BladeUI = (function () {
       } else {
         drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
       }
-      drawMenuButton(bx2, shopY2, bw2, shopBh2, "BOUTIQUE", C.GOLD, null);
-      drawMenuButton(bx2, levelsY2, bw2, levelsBh2, "NIVEAUX", C.CY, null);
+      drawMenuButton(bx2, shopY2, bw2, shopBh2, "NIVEAUX", C.CY, null);
+      drawMenuButton(bx2, levelsY2, bw2, levelsBh2, "BOUTIQUE", C.GOLD, null);
 
       btnRects.TITLE.arcade = { x: bx2, y: arcadeY2, w: bw2, h: bh2 };
       btnRects.TITLE.daily = { x: bx2, y: dailyY2, w: bw2, h: bh2 };
-      btnRects.TITLE.shop = { x: bx2, y: shopY2, w: bw2, h: shopBh2 };
-      btnRects.TITLE.levels = { x: bx2, y: levelsY2, w: bw2, h: levelsBh2 };
+      btnRects.TITLE.levels = { x: bx2, y: shopY2, w: bw2, h: shopBh2 };
+      btnRects.TITLE.shop = { x: bx2, y: levelsY2, w: bw2, h: levelsBh2 };
 
       // blade selector
       var rowY2 = levelsY2 + levelsBh2 + MIN * 0.07;

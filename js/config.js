@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.12',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.13',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -147,6 +147,9 @@ var CONFIG = {
     { id: 'oni',     name: 'ONI',     outer: 'rgba(162,107,255,0.5)',inner: '#f0e8ff', glow: '#a26bff', unlock: { type: 'shop',   price: 450 } },
     { id: 'aurum',   name: 'AURUM',   outer: 'rgba(255,208,0,0.5)',  inner: '#fff6d0', glow: '#ffd000', unlock: { type: 'shop',   price: 600 } },
     { id: 'spectre', name: 'SPECTRE', outer: 'rgba(0,255,200,0.5)',  inner: '#e0fff8', glow: '#00ffc8', unlock: { type: 'shop',   price: 1000 } },
+    { id: 'ronin',   name: 'RÔNIN',   outer: 'rgba(255,106,0,0.5)',  inner: '#ffe8d0', glow: '#ff6a00', unlock: { type: 'shop',   price: 2500 } },
+    { id: 'azur',    name: 'AZUR',    outer: 'rgba(41,121,255,0.5)', inner: '#dceaff', glow: '#2979ff', unlock: { type: 'shop',   price: 4000 } },
+    { id: 'omega',   name: 'OMÉGA',   outer: 'rgba(255,242,176,0.55)',inner: '#ffffff', glow: '#fff2b0', unlock: { type: 'shop',  price: 8000 } },
     { id: 'glitch',  name: 'GLITCH',  outer: 'rgba(255,43,74,0.5)',  inner: '#ffe0e6', glow: '#ff2b4a', unlock: { type: 'streak', value: 3 } },
     { id: 'phantom', name: 'PHANTOM', outer: 'rgba(255,255,255,0.4)',inner: '#ffffff', glow: '#ffffff', unlock: { type: 'streak', value: 7 } },
   ],
