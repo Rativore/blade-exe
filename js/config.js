@@ -10,6 +10,7 @@
  *   js/levels.js  → BladeLevels  (vagues, boss, seed du défi quotidien)
  *   js/meta.js    → BladeMeta    (sauvegarde, records, lames, série quotidienne)
  *   js/audio.js   → BladeAudio   (WebAudio synthé, aucun fichier externe)
+ *   js/ads.js     → BladeAds     (couche pub — overlays DOM, jamais de canvas)
  *   js/ui.js      → BladeUI      (rendu canvas + effets cosmétiques)
  *   js/main.js    → boucle, input, écrans TITLE/PLAY/OVER, câblage global
  * Chaque module : window.X = X ; et si module.exports existe → module.exports = X
@@ -18,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.4',             // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.5',             // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -90,6 +91,22 @@ var CONFIG = {
     ARCADE_RATE: 1000,        // arcade : floor(score / RATE) éclats par partie
   },
 
+  /* ------------------------------------------------ publicité (simulée) */
+  ADS: {
+    ENABLED: true,
+    PROVIDER: 'sim',            // 'sim' = fausse pub (compte à rebours) ; plus
+                                // tard : 'crazygames' | 'admob' — seul ads.js change
+    SIM_DURATION: 5,            // s de la pub simulée
+    INTERSTITIAL_EVERY: 2,      // 1 interstitiel toutes les N fins de partie
+    INTERSTITIAL_MIN_GAMES: 5,  // jamais avant N parties jouées au total (save.gamesPlayed)
+    INTERSTITIAL_COOLDOWN: 120, // s minimum entre deux interstitiels
+    NO_AD_AFTER_WIN: true,      // jamais d'interstitiel après dailyWin ou 3★
+    CONTINUE_PER_RUN: 1,        // « Continuer (pub) » max par partie (arcade seulement)
+    DAILY_X2: true,             // « ×2 éclats (pub) » sur l'écran DÉFI RÉUSSI
+    BANNER: true,               // bandeau simulé en haut du menu TITLE uniquement
+    BANNER_HEIGHT: 50,          // px
+  },
+
   /* ------------------------------------------------ mode NIVEAUX */
   LEVELS: {
     PER_WORLD: 30,
@@ -147,6 +164,11 @@ var CONFIG = {
  *   target → status 'WIN', event {type:'levelWin', score, maxCombo,
  *   stars: lives} (les vies restantes = étoiles) ; défaite = 'over' normal.
  *   state gagne target (mode level, sinon null) pour la barre de progression.
+ * engine.revive() → bool — uniquement si status === 'OVER' et mode 'arcade' :
+ *   repasse status à 'PLAY', lives = 1, combo = 0, vide objs (boss compris),
+ *   réarme le timer de spawn ; score/maxCombo conservés. Sinon → false.
+ *   (Support du « Continuer (pub) » ; le déterminisme d'un run avec revive
+ *   n'est plus garanti après l'appel — sans importance en arcade.)
  * engine.state  (lecture seule pour UI/tests) :
  *   { status:'PLAY'|'OVER'|'WIN',      // 'WIN' : mode daily uniquement, score >= DAILY.GOAL
  *     score, lives, combo, mult, maxCombo,
@@ -241,6 +263,10 @@ var CONFIG = {
  *   - déverrouille les lames 'streak' dont la condition est atteinte.
  * BladeMeta.buyBlade(id) → { ok:bool, shards }  — refus si pas type 'shop',
  *   déjà possédée, ou shards < price ; sinon débite, ajoute à unlocked, persiste.
+ * save.gamesPlayed (migration : 0) — incrémenté à chaque recordRun ET chaque
+ *   recordLevel (sert au seuil ADS.INTERSTITIAL_MIN_GAMES).
+ * BladeMeta.addShards(n) → shards — crédite n (>0) éclats et persiste
+ *   (récompenses pub : ×2 défi, +bonus boutique plus tard).
  * --- mode NIVEAUX ---
  * save.levelStars = { 'inferno-1': 2, ... }  (0 étoiles = jamais réussi ;
  *   migration : défaut {}).
@@ -254,6 +280,26 @@ var CONFIG = {
  * BladeMeta.getBlades() → [{...blade, unlocked:bool, equipped:bool}]
  * BladeMeta.equipBlade(id) → bool (refus si verrouillée)
  * BladeMeta.todayStr(d?) → 'YYYY-MM-DD' locale
+ *
+ * ------------------------------------------------------------------- ads.js
+ * BladeAds — couche publicité, indépendante du canvas : tous ses affichages
+ * sont des overlays DOM (div plein écran / bandeau), par-dessus le jeu.
+ * PROVIDER 'sim' : vidéo remplacée par un panneau « PUBLICITÉ SIMULÉE » avec
+ * compte à rebours (ADS.SIM_DURATION) — interstitiel fermable à la fin,
+ * récompensée créditée seulement si le compte à rebours va au bout (bouton
+ * ABANDONNER possible → échec). Brancher un vrai SDK = réécrire ce seul module.
+ * BladeAds.init()
+ * BladeAds.registerRunEnd({won:bool}) → bool — comptabilise une fin de partie
+ *   et affiche l'interstitiel si dû : toutes les INTERSTITIAL_EVERY fins, si
+ *   gamesPlayed >= INTERSTITIAL_MIN_GAMES, cooldown écoulé, et pas après une
+ *   victoire quand NO_AD_AFTER_WIN. Retourne true si une pub s'affiche.
+ * BladeAds.showRewarded(placement, cb) — placement 'continue'|'dailyX2' ;
+ *   cb(success:bool) appelé à la fermeture. Pendant tout overlay : les inputs
+ *   du jeu ne doivent rien recevoir (l'overlay DOM capte les événements).
+ * BladeAds.setBanner(visible) — bandeau simulé fixé en haut (BANNER_HEIGHT px),
+ *   TITLE uniquement ; ne s'affiche que si ADS.BANNER.
+ * BladeAds.bannerHeight() → px effectifs du bandeau visible (0 sinon).
+ * Silencieux et sans crash sous Node (aucun DOM → no-op).
  *
  * ----------------------------------------------------------------- audio.js
  * BladeAudio.init()            // crée l'AudioContext (+ resume immédiat)
@@ -331,7 +377,8 @@ var CONFIG = {
  * lames débloquées ce run, REJOUER + MENU. Boutons = zones cliquables que
  * BladeUI.hitTest(x,y,screen) → 'arcade'|'daily'|'replay'|'menu'|'mute'|
  * 'bladePrev'|'bladeNext'|'home'|'shop'|'shopPrev'|'shopNext'|'buy'|'equip'|
- * 'back'|'levels'|'world0'|'world1'|'lvl1'..'lvl30'|'next'|null (main.js
+ * 'back'|'levels'|'world0'|'world1'|'lvl1'..'lvl30'|'next'|'continue'|'x2'|
+ * null (main.js
  * route les taps ; écran SHOP : carrousel dans menu.shopIndex, buy/equip sur
  * menu.blades[menu.shopIndex] ; écrans NIVEAUX : menu.worldIndex/levelIndex).
  * PLAY : bouton ⌂ ACCUEIL discret en haut à gauche, SOUS le score (dans la
@@ -359,6 +406,19 @@ var CONFIG = {
  * refus ; 'equip' → equipBlade + setBlade ; menu.shopIndex pour le carrousel.
  * Fin de run : menu.shardsEarnedThisRun = recordRun().shardsEarned (affiché
  * sur OVER/WIN) ; musique menu conservée sur SHOP.
+ * PUB (view.adOffers, fourni par main.js) : OVER — bouton « CONTINUER (PUB) »
+ * (btnRects.OVER.continue) si view.adOffers.continue ; WIN — bouton « ×2
+ * ÉCLATS (PUB) » (btnRects.WIN.x2) si view.adOffers.x2. Sur TITLE, décaler le
+ * bouton SON et tout contenu du haut de view.bannerOffset px (bandeau DOM).
+ * Flux main.js : event 'over' en arcade avec continue dispo → écran OVER SANS
+ * recordRun (fin en attente) ; action 'continue' → showRewarded('continue') →
+ * succès : engine.revive() + retour PLAY + musique game ; échec/refus ou toute
+ * autre action → finaliser (recordRun) PUIS agir. Fin de partie finalisée
+ * (over/levelend/dailyWin) → BladeAds.registerRunEnd({won}) ; won = dailyWin
+ * ou niveau réussi 3★. Action 'x2' (WIN, une fois) → showRewarded('dailyX2')
+ * → succès : BladeMeta.addShards(menu.shardsEarnedThisRun) et doubler
+ * l'affichage. Bannière : BladeAds.setBanner(screen === 'TITLE') à chaque
+ * changement d'écran ; view.bannerOffset = BladeAds.bannerHeight().
  * NIVEAUX : bouton 'levels' au TITLE → WORLDS ; 'world0/world1' (si ouvert) →
  * setTheme(monde) + LEVELS ; 'lvlN' (si déverrouillé : niveau précédent fini
  * ET porte d'étoiles atteinte) → engine mode 'level' avec levelSpec, musique

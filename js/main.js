@@ -26,6 +26,16 @@
   var engine = null;
   var currentMode = "arcade";
   var overHandled = false;
+  var pendingEnd = null;          // {ev} — fin 'over' arcade en attente (offre CONTINUER (PUB))
+  var continueUsedThisRun = false; // CONTINUE_PER_RUN (1) déjà consommé ce run
+  var x2UsedThisRun = false;       // ×2 ÉCLATS (PUB) déjà tenté sur ce WIN
+
+  BladeAds.init();
+  function setScreen(s) {
+    screen = s;
+    BladeAds.setBanner(screen === "TITLE");
+  }
+  setScreen(screen); // bandeau au boot (écran TITLE initial)
 
   // ---------------------------------------------------------------- orientation (paysage)
   var isTouch = ("ontouchstart" in window);
@@ -70,12 +80,15 @@
   function startRun(mode) {
     currentMode = mode;
     overHandled = false;
+    pendingEnd = null;
+    continueUsedThisRun = false;
+    x2UsedThisRun = false;
     var seed = (mode === "daily")
       ? BladeLevels.dailySeed(BladeMeta.todayStr())
       : (Date.now() & 0xffffffff);
     var size = BladeUI.resize();
     engine = BladeEngine.create({ mode: mode, seed: seed, viewport: { w: size.w, h: size.h } });
-    screen = "PLAY";
+    setScreen("PLAY");
     BladeAudio.startMusic("game");
   }
 
@@ -90,7 +103,49 @@
     BladeUI.setTheme(null);
     BladeAudio.stopMusic();
     BladeAudio.startMusic("menu");
-    screen = nextScreen;
+    setScreen(nextScreen);
+    BladeAds.registerRunEnd({ won: nextScreen === "WIN" });
+  }
+
+  // ---------------------------------------------------------------- PUB : continuer (arcade, fin en attente)
+  function continueOfferAvailable() {
+    return currentMode === "arcade" &&
+      typeof CONFIG !== "undefined" && CONFIG.ADS && CONFIG.ADS.ENABLED &&
+      !continueUsedThisRun &&
+      !!engine && typeof engine.revive === "function";
+  }
+  function finalizePendingEnd() {
+    if (!pendingEnd) return;
+    var p = pendingEnd;
+    pendingEnd = null;
+    handleRunEnd(p.ev, "OVER");
+  }
+  function doContinue() {
+    if (!pendingEnd) return;
+    continueUsedThisRun = true;
+    BladeAds.showRewarded("continue", function (success) {
+      if (success && pendingEnd) {
+        pendingEnd = null;
+        engine.revive();
+        setScreen("PLAY");
+        BladeAudio.startMusic("game");
+      } else {
+        finalizePendingEnd();
+      }
+    });
+  }
+  // ---------------------------------------------------------------- PUB : ×2 éclats (WIN, une fois)
+  function doX2() {
+    if (x2UsedThisRun) return;
+    if (!(typeof CONFIG !== "undefined" && CONFIG.ADS && CONFIG.ADS.ENABLED && CONFIG.ADS.DAILY_X2)) return;
+    x2UsedThisRun = true;
+    BladeAds.showRewarded("dailyX2", function (success) {
+      if (success) {
+        BladeMeta.addShards(menu.shardsEarnedThisRun);
+        menu.shardsEarnedThisRun = menu.shardsEarnedThisRun * 2;
+        refreshMeta();
+      }
+    });
   }
 
   // ---------------------------------------------------------------- mode NIVEAUX
@@ -120,7 +175,7 @@
     var size = BladeUI.resize();
     engine = BladeEngine.create({ mode: "level", seed: spec.seed, viewport: { w: size.w, h: size.h }, level: spec });
     BladeUI.setTheme(world.theme);
-    screen = "PLAY";
+    setScreen("PLAY");
     BladeAudio.startMusic(world.music);
   }
   function handleLevelEnd(success, e) {
@@ -143,7 +198,8 @@
     };
     BladeAudio.stopMusic();
     BladeAudio.startMusic("menu");
-    screen = "LEVELEND";
+    setScreen("LEVELEND");
+    BladeAds.registerRunEnd({ won: success && stars === 3 });
   }
 
   var SOUND_FOR_EVENT = {
@@ -161,6 +217,7 @@
       if (ev.type === "wave") BladeAudio.setMusicIntensity((ev.id - 1) / 5);
       if (ev.type === "over") {
         if (currentMode === "level") handleLevelEnd(false, ev);
+        else if (continueOfferAvailable()) { pendingEnd = { ev: ev }; setScreen("OVER"); }
         else handleRunEnd(ev, "OVER");
       }
       if (ev.type === "dailyWin") handleRunEnd(ev, "WIN");
@@ -183,13 +240,16 @@
   }
   function handleAction(action) {
     if (!action) return;
+    if (pendingEnd && action !== "continue") finalizePendingEnd(); // fin en attente : au premier autre choix, on finalise (une seule fois, cf overHandled)
+    if (action === "continue") { doContinue(); return; }
+    if (action === "x2") { doX2(); return; }
     if (action === "world0" || action === "world1") {
       var wIdx = (action === "world0") ? 0 : 1;
       if (isWorldUnlocked(wIdx)) {
         BladeAudio.play("click");
         menu.worldIndex = wIdx;
         BladeUI.setTheme(CONFIG.WORLDS[wIdx].theme);
-        screen = "LEVELS";
+        setScreen("LEVELS");
       } else {
         BladeAudio.play("wrong");
       }
@@ -223,7 +283,7 @@
         break;
       case "menu":
         BladeAudio.play("click"); BladeUI.setTheme(null); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
-        refreshMeta(); screen = "TITLE"; break;
+        refreshMeta(); setScreen("TITLE"); break;
       case "mute":
         BladeAudio.setMuted(!BladeAudio.muted);
         menu.muted = BladeAudio.muted;
@@ -231,13 +291,13 @@
         break;
       case "bladePrev": cycleBlade(-1); break;
       case "bladeNext": cycleBlade(1); break;
-      case "shop": BladeAudio.play("click"); screen = "SHOP"; break;
-      case "levels": BladeAudio.play("click"); BladeUI.setTheme(null); screen = "WORLDS"; break;
+      case "shop": BladeAudio.play("click"); setScreen("SHOP"); break;
+      case "levels": BladeAudio.play("click"); BladeUI.setTheme(null); setScreen("WORLDS"); break;
       case "back":
         BladeAudio.play("click");
-        if (screen === "LEVELS") { BladeUI.setTheme(null); screen = "WORLDS"; }
-        else if (screen === "LEVELEND") { screen = "LEVELS"; }
-        else { screen = "TITLE"; }
+        if (screen === "LEVELS") { BladeUI.setTheme(null); setScreen("WORLDS"); }
+        else if (screen === "LEVELEND") { setScreen("LEVELS"); }
+        else { setScreen("TITLE"); }
         break;
       case "shopPrev": shopCycle(-1); break;
       case "shopNext": shopCycle(1); break;
@@ -293,7 +353,7 @@
           overHandled = true;
           BladeAudio.stopMusic();
           BladeAudio.startMusic("menu");
-          screen = "LEVELS";
+          setScreen("LEVELS");
         } else {
           handleRunEnd({ score: engine.state.score, maxCombo: engine.state.maxCombo }, "TITLE");
         }
@@ -358,7 +418,15 @@
       routeEvents(engine.update(dt));
     }
 
-    var view = { screen: screen, engineState: engine ? engine.state : null, meta: meta, menu: menu, mode: currentMode, portraitBlocked: portraitBlocked };
+    var adOffers = {};
+    if (screen === "OVER") adOffers.continue = !!pendingEnd;
+    if (screen === "WIN") adOffers.x2 = !x2UsedThisRun && !!(CONFIG.ADS && CONFIG.ADS.ENABLED && CONFIG.ADS.DAILY_X2);
+
+    var view = {
+      screen: screen, engineState: engine ? engine.state : null, meta: meta, menu: menu, mode: currentMode,
+      portraitBlocked: portraitBlocked, adOffers: adOffers,
+      bannerOffset: screen === "TITLE" ? BladeAds.bannerHeight() : 0
+    };
     BladeUI.render(dt, view);
 
     requestAnimationFrame(frame);

@@ -478,6 +478,62 @@ function runLevelPassive(worldIdx, levelIdx, maxSeconds) {
     'status=' + q.finalStatus + (q.threw ? ' EXC=' + q.err : ''));
 })();
 
+/* ======================================================== CASE g1 : revive */
+(function () {
+  var engine = BladeEngine.create({ mode: 'arcade', seed: 777, viewport: { w: VIEW.w, h: VIEW.h } });
+  var frames = Math.round(60 / DT);
+  for (var f = 0; f < frames; f++) {
+    engine.update(DT);
+    if (engine.state.status === 'OVER') break;
+  }
+  var scoreBefore = engine.state.score;
+  var maxComboBefore = engine.state.maxCombo;
+  var wasOver = engine.state.status === 'OVER';
+  var r = engine.revive();
+  check('g1a) revive() après OVER en arcade -> true, status PLAY, lives 1, score/maxCombo conservés, objs vides',
+    wasOver && r === true && engine.state.status === 'PLAY' && engine.state.lives === 1
+    && engine.state.combo === 0 && engine.state.objs.length === 0
+    && engine.state.score === scoreBefore && engine.state.maxCombo === maxComboBefore,
+    'wasOver=' + wasOver + ' r=' + r + ' status=' + engine.state.status + ' lives=' + engine.state.lives
+    + ' objs=' + engine.state.objs.length + ' score=' + engine.state.score + '/' + scoreBefore);
+
+  var r2 = engine.revive();
+  check('g1b) revive() en PLAY -> false', r2 === false, 'r2=' + r2);
+
+  var daily = BladeEngine.create({ mode: 'daily', seed: 42, viewport: { w: VIEW.w, h: VIEW.h } });
+  var framesD = Math.round(300 / DT);
+  for (var fd = 0; fd < framesD; fd++) {
+    daily.update(DT);
+    if (daily.state.status !== 'PLAY') break;
+  }
+  var r3 = daily.revive();
+  check('g1c) revive() en mode daily OVER -> false', daily.state.status === 'OVER' && r3 === false,
+    'dailyStatus=' + daily.state.status + ' r3=' + r3);
+})();
+
+/* ==================================================== CASE g2 : gamesPlayed */
+(function () {
+  var M = freshMeta();
+  var before = M.get().gamesPlayed;
+  M.recordRun({ mode: 'arcade', score: 100, maxCombo: 1 });
+  var afterRun = M.get().gamesPlayed;
+  M.recordLevel({ worldId: 'inferno', levelIdx: 1, stars: 2, score: 400 });
+  var afterLevel = M.get().gamesPlayed;
+  check('g2) gamesPlayed s\'incrémente sur recordRun et recordLevel',
+    before === 0 && afterRun === 1 && afterLevel === 2,
+    'before=' + before + ' afterRun=' + afterRun + ' afterLevel=' + afterLevel);
+})();
+
+/* ==================================================== CASE g3 : addShards */
+(function () {
+  var M = freshMeta();
+  var before = M.get().shards;
+  var result = M.addShards(50);
+  var after = M.get().shards;
+  check('g3) addShards(50) crédite le solde', before === 0 && result === 50 && after === 50,
+    'before=' + before + ' result=' + result + ' after=' + after);
+})();
+
 /* ---------------------------------------------------------------- rapport */
 console.log('\n=== BLADE.EXE — simulation.test.js ===');
 console.log(results.join('\n'));

@@ -36,6 +36,7 @@ var BladeMeta = (function () {
       blades: { unlocked: ['neon'], equipped: 'neon' },
       daily: { lastDate: null, streak: 0, scores: {} },
       levelStars: {},
+      gamesPlayed: 0,
     };
   }
 
@@ -65,6 +66,8 @@ var BladeMeta = (function () {
         }
         // migration : anciennes sauvegardes sans levelStars -> {} (défaut déjà posé)
         save.levelStars = (parsed.levelStars && typeof parsed.levelStars === 'object') ? parsed.levelStars : save.levelStars;
+        // migration : anciennes sauvegardes sans gamesPlayed -> 0 (défaut déjà posé)
+        save.gamesPlayed = typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : save.gamesPlayed;
       } catch (e) {
         save = defaults();
       }
@@ -166,6 +169,7 @@ var BladeMeta = (function () {
     }
 
     s.shards += shardsEarned;
+    s.gamesPlayed = (s.gamesPlayed || 0) + 1;
 
     var unlocked = checkUnlocks();
     persist();
@@ -203,6 +207,7 @@ var BladeMeta = (function () {
     }
 
     s.shards += shardsEarned;
+    s.gamesPlayed = (s.gamesPlayed || 0) + 1;
     persist();
 
     return { shardsEarned: shardsEarned, improved: improved, shards: s.shards };
@@ -259,6 +264,17 @@ var BladeMeta = (function () {
     return true;
   }
 
+  // BladeMeta.addShards(n) -> shards — crédite n (>0) éclats et persiste
+  // (récompenses pub : ×2 défi, +bonus boutique plus tard).
+  function addShards(n) {
+    var s = get();
+    if (n > 0) {
+      s.shards += n;
+      persist();
+    }
+    return s.shards;
+  }
+
   var BladeMeta = {
     load: load,
     get: get,
@@ -269,6 +285,7 @@ var BladeMeta = (function () {
     todayStr: todayStr,
     recordLevel: recordLevel,
     getLevelProgress: getLevelProgress,
+    addShards: addShards,
   };
 
   return BladeMeta;

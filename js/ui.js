@@ -455,8 +455,9 @@ var BladeUI = (function () {
     var meta = view.meta || { best: 0, daily: { streak: 0 }, shards: 0 };
     var menu = view.menu || { blades: [], bladeIndex: 0, muted: false };
     var landscape = W > H;
+    var topOffset = view.bannerOffset || 0; // bandeau pub DOM en haut de l'écran TITLE
 
-    txt((meta.shards || 0) + " " + currencySymbol(), 16, 26, Math.round(MIN * 0.032), C.GOLD, "left", true);
+    txt((meta.shards || 0) + " " + currencySymbol(), 16, 26 + topOffset, Math.round(MIN * 0.032), C.GOLD, "left", true);
 
     if (landscape) {
       // ---- left column (~40% W) : logo + subtitle + version ----
@@ -555,7 +556,7 @@ var BladeUI = (function () {
 
     // mute toggle
     var mw = 96, mh = 34;
-    var mx = W - 16 - mw, my = 14;
+    var mx = W - 16 - mw, my = 14 + topOffset;
     ctx.save();
     ctx.strokeStyle = C.CY; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = C.CY;
     ctx.strokeRect(mx, my, mw, mh);
@@ -566,15 +567,33 @@ var BladeUI = (function () {
     txt("v" + verMid, 16, H - 16, 13, "#4a6a75", "left", false);
   }
 
+  // ---------------------------------------------------------------- ad button (mis en avant : fond plein + glow fort)
+  function drawAdButton(x, y, w, h, label) {
+    ctx.save();
+    ctx.fillStyle = hexToRgba(C.GOLD, 0.18); ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = C.GOLD; ctx.lineWidth = 3; ctx.shadowBlur = 22; ctx.shadowColor = C.GOLD;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+    txt(label, x + w / 2, y + h / 2, Math.round(MIN * 0.034), C.GOLD, "center", true);
+  }
+
   // ---------------------------------------------------------------- end-screen buttons (OVER/WIN)
   // landscape : REJOUER / MENU empilés, plus grands, colonne de droite
-  function drawEndButtonsLandscape(screenKey) {
+  // adBtn : {key,label}|null — bouton pub, au-dessus de la pile, mis en avant
+  function drawEndButtonsLandscape(screenKey, adBtn) {
     var bw = W * 0.28, bh = H * 0.22, gap = H * 0.06;
     var colRX = W * 0.80;
     var rx = colRX - bw / 2;
-    var totalH = bh * 2 + gap;
+    var adBh = bh * 0.55, adGap = gap * 0.65;
+    var totalH = bh * 2 + gap + (adBtn ? adBh + adGap : 0);
     var y0 = H * 0.5 - totalH / 2;
-    var replayY = y0, menuY = y0 + bh + gap;
+    var replayY = y0;
+    if (adBtn) {
+      drawAdButton(rx, y0, bw, adBh, adBtn.label);
+      btnRects[screenKey][adBtn.key] = { x: rx, y: y0, w: bw, h: adBh };
+      replayY = y0 + adBh + adGap;
+    }
+    var menuY = replayY + bh + gap;
 
     drawMenuButton(rx, replayY, bw, bh, "REJOUER", C.CY, null);
     drawMenuButton(rx, menuY, bw, bh, "MENU", C.MG, null);
@@ -583,10 +602,17 @@ var BladeUI = (function () {
     btnRects[screenKey].menu = { x: rx, y: menuY, w: bw, h: bh };
   }
   // portrait : REJOUER / MENU côte à côte, centrés (disposition d'origine)
-  function drawEndButtonsPortrait(screenKey) {
+  function drawEndButtonsPortrait(screenKey, adBtn) {
     var bw = MIN * 0.36, bh = MIN * 0.105, gap = MIN * 0.04;
     var y = H * 0.60;
     var rx = W / 2 - bw - gap / 2, mxB = W / 2 + gap / 2;
+
+    if (adBtn) {
+      var adBw = bw * 2 + gap, adBh = bh * 0.85, adGap = MIN * 0.035;
+      var adY = y - adBh - adGap, adX = W / 2 - adBw / 2;
+      drawAdButton(adX, adY, adBw, adBh, adBtn.label);
+      btnRects[screenKey][adBtn.key] = { x: adX, y: adY, w: adBw, h: adBh };
+    }
 
     drawMenuButton(rx, y, bw, bh, "REJOUER", C.CY, null);
     drawMenuButton(mxB, y, bw, bh, "MENU", C.MG, null);
@@ -620,7 +646,10 @@ var BladeUI = (function () {
       txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), tx, H * 0.62, Math.round(MIN * 0.028), C.GOLD, align, true);
     }
 
-    if (landscape) drawEndButtonsLandscape("OVER"); else drawEndButtonsPortrait("OVER");
+    var offerContinue = !!(view.adOffers && view.adOffers.continue);
+    if (!offerContinue) delete btnRects.OVER.continue;
+    var contBtn = offerContinue ? { key: "continue", label: "CONTINUER (PUB)" } : null;
+    if (landscape) drawEndButtonsLandscape("OVER", contBtn); else drawEndButtonsPortrait("OVER", contBtn);
   }
 
   // ---------------------------------------------------------------- win screen
@@ -649,7 +678,10 @@ var BladeUI = (function () {
       txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), tx, H * 0.62, Math.round(MIN * 0.028), C.GOLD, align, true);
     }
 
-    if (landscape) drawEndButtonsLandscape("WIN"); else drawEndButtonsPortrait("WIN");
+    var offerX2 = !!(view.adOffers && view.adOffers.x2);
+    if (!offerX2) delete btnRects.WIN.x2;
+    var x2Btn = offerX2 ? { key: "x2", label: "×2 ÉCLATS (PUB)" } : null;
+    if (landscape) drawEndButtonsLandscape("WIN", x2Btn); else drawEndButtonsPortrait("WIN", x2Btn);
   }
 
   // ---------------------------------------------------------------- shop screen

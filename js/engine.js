@@ -381,6 +381,21 @@
     return [];
   };
 
+  /* ---------------------------------------------------------------- revive */
+  // Support du « Continuer (pub) » : uniquement si status === 'OVER' et mode
+  // 'arcade' -> repasse en PLAY, lives = 1, combo = 0, vide objs (boss compris),
+  // réarme le timer de spawn ; score/maxCombo conservés. Sinon -> false.
+  Engine.prototype.revive = function () {
+    if (this.state.status !== 'OVER' || this.mode !== 'arcade') return false;
+    this.state.status = 'PLAY';
+    this.state.lives = 1;
+    this._setCombo(0);
+    this._objs.length = 0;
+    this.bossActive = false;
+    this.spawnT = 0.4;
+    return true;
+  };
+
   /* ---------------------------------------------------------------- resize */
   Engine.prototype.resize = function (w, h) {
     var oldW = this.W, oldH = this.H, oldMIN = this.MIN;
