@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.11',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.12',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 

@@ -449,7 +449,6 @@ var BladeUI = (function () {
     if (sub) txt(sub, x + w / 2, y + h * 0.78, Math.round(MIN * 0.026), col, "center", false);
   }
   function drawTitleScreen(dt, view) {
-    delete btnRects.TITLE.bladePrev; // flèche ◀ retirée — purge la zone cliquable résiduelle
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
     var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
     var meta = view.meta || { best: 0, daily: { streak: 0 }, shards: 0 };
@@ -460,29 +459,32 @@ var BladeUI = (function () {
     txt((meta.shards || 0) + " " + currencySymbol(), 16, 26 + topOffset, Math.round(MIN * 0.032), C.GOLD, "left", true);
 
     if (landscape) {
+      // zone utile sous le bandeau pub : tout se centre dans [topOffset, H]
+      var availH = H - topOffset;
       // ---- left column (~40% W) : logo + subtitle + version ----
       var colX = W * 0.20;
-      txt("BLADE", colX + jit, H * 0.30, Math.round(MIN * 0.16), C.CY, "center", true);
-      txt(".EXE", colX - jit, H * 0.30 + MIN * 0.135, Math.round(MIN * 0.115), C.MG, "center", true);
+      txt("BLADE", colX + jit, topOffset + availH * 0.28, Math.round(MIN * 0.16), C.CY, "center", true);
+      txt(".EXE", colX - jit, topOffset + availH * 0.28 + MIN * 0.135, Math.round(MIN * 0.115), C.MG, "center", true);
 
       ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
-      txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", colX, H * 0.60, Math.round(MIN * 0.034), "#cfefff", "center", false);
+      txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", colX, topOffset + availH * 0.62, Math.round(MIN * 0.034), "#cfefff", "center", false);
       ctx.restore();
 
       // ---- right column : big buttons + blade selector ----
-      var bw = W * 0.40, bh = H * 0.16;
+      var bw = W * 0.40, bh = availH * 0.16;
       var colRX = W * 0.72;
       var bx = colRX - bw / 2;
-      var gap = H * 0.05;
+      var gap = availH * 0.05;
       var shopBh = bh * 0.5, shopGap = gap * 0.7;
       var levelsBh = bh * 0.5, levelsGap = gap * 0.55;
+      var selectorH = MIN * 0.19; // rangée du sabre incluse dans le centrage
       var totalH = bh * 2 + gap + shopGap + shopBh + levelsGap + levelsBh;
-      var arcadeY = H * 0.5 - totalH / 2 - MIN * 0.02;
+      var arcadeY = topOffset + Math.max(8, (availH - totalH - selectorH) / 2);
       var dailyY = arcadeY + bh + gap;
       var shopY = dailyY + bh + shopGap;
       var levelsY = shopY + shopBh + levelsGap;
 
-      drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
+      drawMenuButton(bx, arcadeY, bw, bh, "JOUER", C.CY, "RECORD " + (meta.best || 0));
       if (menu.dailyDone) {
         ctx.save(); ctx.globalAlpha = 0.45;
         drawMenuButton(bx, dailyY, bw, bh, "DÉFI RÉUSSI ✓", C.MG, "REVENEZ DEMAIN · SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
@@ -504,9 +506,11 @@ var BladeUI = (function () {
       var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
 
-      var nextX = colRX + bw * 0.58;
+      var prevX = colRX - bw * 0.58, nextX = colRX + bw * 0.58;
       var arrowHalf = MIN * 0.06;
+      txt("◀", prevX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
       txt("▶", nextX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
+      btnRects.TITLE.bladePrev = { x: prevX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
       btnRects.TITLE.bladeNext = { x: nextX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
     } else {
       // ---- portrait (fenêtre PC) : disposition centrée d'origine ----
@@ -526,7 +530,7 @@ var BladeUI = (function () {
       var levelsY2 = shopY2 + shopBh2 + MIN * 0.035;
       var bx2 = W / 2 - bw2 / 2;
 
-      drawMenuButton(bx2, arcadeY2, bw2, bh2, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
+      drawMenuButton(bx2, arcadeY2, bw2, bh2, "JOUER", C.CY, "RECORD " + (meta.best || 0));
       if (menu.dailyDone) {
         ctx.save(); ctx.globalAlpha = 0.45;
         drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI RÉUSSI ✓", C.MG, "REVENEZ DEMAIN");
@@ -548,15 +552,18 @@ var BladeUI = (function () {
       var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
 
-      var nextX2 = W / 2 + bw2 * 0.42;
+      var prevX2 = W / 2 - bw2 * 0.42, nextX2 = W / 2 + bw2 * 0.42;
       var arrowHalf2 = MIN * 0.05;
+      txt("◀", prevX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
       txt("▶", nextX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      btnRects.TITLE.bladePrev = { x: prevX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
       btnRects.TITLE.bladeNext = { x: nextX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
     }
 
-    // mute toggle
+    // mute toggle — en bas à GAUCHE au-dessus de la version (le haut droit est
+    // occupé par les boutons du menu, le bas droit par la flèche ▶ du sabre)
     var mw = 96, mh = 34;
-    var mx = W - 16 - mw, my = 14 + topOffset;
+    var mx = 16, my = H - 16 - 18 - mh;
     ctx.save();
     ctx.strokeStyle = C.CY; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = C.CY;
     ctx.strokeRect(mx, my, mw, mh);
