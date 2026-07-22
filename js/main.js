@@ -272,6 +272,8 @@
         if (menu.dailyDone) { BladeAudio.play("wrong"); break; } // déjà réussi aujourd'hui
         BladeAudio.play("click"); startRun("daily"); break;
       case "replay":
+        // le défi du jour ne se rejoue pas une fois réussi (écran WIN sans REJOUER, ceinture ici)
+        if (currentMode === "daily" && menu.dailyDone) { BladeAudio.play("wrong"); break; }
         BladeAudio.play("click");
         if (screen === "LEVELEND") startLevel(menu.worldIndex, menu.levelIndex);
         else startRun(currentMode);

@@ -580,12 +580,13 @@ var BladeUI = (function () {
   // ---------------------------------------------------------------- end-screen buttons (OVER/WIN)
   // landscape : REJOUER / MENU empilés, plus grands, colonne de droite
   // adBtn : {key,label}|null — bouton pub, au-dessus de la pile, mis en avant
-  function drawEndButtonsLandscape(screenKey, adBtn) {
+  function drawEndButtonsLandscape(screenKey, adBtn, noReplay) {
     var bw = W * 0.28, bh = H * 0.22, gap = H * 0.06;
     var colRX = W * 0.80;
     var rx = colRX - bw / 2;
     var adBh = bh * 0.55, adGap = gap * 0.65;
-    var totalH = bh * 2 + gap + (adBtn ? adBh + adGap : 0);
+    var nBtns = noReplay ? 1 : 2;
+    var totalH = bh * nBtns + gap * (nBtns - 1) + (adBtn ? adBh + adGap : 0);
     var y0 = H * 0.5 - totalH / 2;
     var replayY = y0;
     if (adBtn) {
@@ -593,16 +594,19 @@ var BladeUI = (function () {
       btnRects[screenKey][adBtn.key] = { x: rx, y: y0, w: bw, h: adBh };
       replayY = y0 + adBh + adGap;
     }
-    var menuY = replayY + bh + gap;
-
-    drawMenuButton(rx, replayY, bw, bh, "REJOUER", C.CY, null);
+    var menuY = replayY;
+    if (noReplay) {
+      delete btnRects[screenKey].replay;
+    } else {
+      drawMenuButton(rx, replayY, bw, bh, "REJOUER", C.CY, null);
+      btnRects[screenKey].replay = { x: rx, y: replayY, w: bw, h: bh };
+      menuY = replayY + bh + gap;
+    }
     drawMenuButton(rx, menuY, bw, bh, "MENU", C.MG, null);
-
-    btnRects[screenKey].replay = { x: rx, y: replayY, w: bw, h: bh };
     btnRects[screenKey].menu = { x: rx, y: menuY, w: bw, h: bh };
   }
   // portrait : REJOUER / MENU côte à côte, centrés (disposition d'origine)
-  function drawEndButtonsPortrait(screenKey, adBtn) {
+  function drawEndButtonsPortrait(screenKey, adBtn, noReplay) {
     var bw = MIN * 0.36, bh = MIN * 0.105, gap = MIN * 0.04;
     var y = H * 0.60;
     var rx = W / 2 - bw - gap / 2, mxB = W / 2 + gap / 2;
@@ -614,6 +618,13 @@ var BladeUI = (function () {
       btnRects[screenKey][adBtn.key] = { x: adX, y: adY, w: adBw, h: adBh };
     }
 
+    if (noReplay) {
+      delete btnRects[screenKey].replay;
+      var cx = W / 2 - bw / 2;
+      drawMenuButton(cx, y, bw, bh, "MENU", C.MG, null);
+      btnRects[screenKey].menu = { x: cx, y: y, w: bw, h: bh };
+      return;
+    }
     drawMenuButton(rx, y, bw, bh, "REJOUER", C.CY, null);
     drawMenuButton(mxB, y, bw, bh, "MENU", C.MG, null);
 
@@ -681,7 +692,8 @@ var BladeUI = (function () {
     var offerX2 = !!(view.adOffers && view.adOffers.x2);
     if (!offerX2) delete btnRects.WIN.x2;
     var x2Btn = offerX2 ? { key: "x2", label: "×2 ÉCLATS (PUB)" } : null;
-    if (landscape) drawEndButtonsLandscape("WIN", x2Btn); else drawEndButtonsPortrait("WIN", x2Btn);
+    // défi réussi = pas de REJOUER (un seul succès par jour, retour demain)
+    if (landscape) drawEndButtonsLandscape("WIN", x2Btn, true); else drawEndButtonsPortrait("WIN", x2Btn, true);
   }
 
   // ---------------------------------------------------------------- shop screen
