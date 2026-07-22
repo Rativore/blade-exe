@@ -19,7 +19,12 @@
 
 var CONFIG = {
 
-  VERSION: '2.18',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.19',            // affichée en bas à gauche de l'écran titre — à incrémenter
+
+  // ⚠️ MODE TEST (2026-07-23, demande client) : true = TOUT le contenu de la
+  // boutique (sabres + thèmes) est possédé d'office, équipable librement.
+  // Repasser à false pour restaurer l'économie réelle (achats en éclats).
+  TEST_ALL_OWNED: true,
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 

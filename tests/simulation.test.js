@@ -252,8 +252,9 @@ function freshMeta() {
   M = freshMeta();
   var u1 = M.recordRun({ mode: 'arcade', score: 9999, maxCombo: 10 });
   var aurumAfterRecord = M.getBlades().filter(function (b) { return b.id === 'aurum'; })[0].unlocked;
-  check('d4) AURUM (shop) NE se déverrouille PAS via un record arcade', u1.unlocked.indexOf('aurum') === -1 && aurumAfterRecord === false,
-    'unlocked=[' + u1.unlocked.join(',') + '] aurum.unlocked=' + aurumAfterRecord);
+  check('d4) AURUM (shop) NE se déverrouille PAS via un record arcade',
+    u1.unlocked.indexOf('aurum') === -1 && (CONFIG.TEST_ALL_OWNED ? aurumAfterRecord === true : aurumAfterRecord === false),
+    'unlocked=[' + u1.unlocked.join(',') + '] aurum.unlocked=' + aurumAfterRecord + (CONFIG.TEST_ALL_OWNED ? ' [mode test tout possédé]' : ''));
 
   // d5 : PLASMA (type 'shop') ne se déverrouille PLUS jamais via le cumul de score
   M = freshMeta();
@@ -262,7 +263,8 @@ function freshMeta() {
   var u3 = M.recordRun({ mode: 'arcade', score: 9000, maxCombo: 1 }); // total 27000
   var blades = M.getBlades();
   var plasmaUnlocked = blades.filter(function (b) { return b.id === 'plasma'; })[0].unlocked;
-  check('d5) PLASMA (shop) NE se déverrouille PAS via le cumul de score', u3.unlocked.indexOf('plasma') === -1 && plasmaUnlocked === false,
+  check('d5) PLASMA (shop) NE se déverrouille PAS via le cumul de score',
+    u3.unlocked.indexOf('plasma') === -1 && (CONFIG.TEST_ALL_OWNED ? plasmaUnlocked === true : plasmaUnlocked === false),
     'unlocked=[' + u3.unlocked.join(',') + '] plasma.unlocked=' + plasmaUnlocked);
 
   // d6 : unlock 'streak' (série quotidienne >= 3, réussites >= 1200) -> glitch
@@ -277,7 +279,8 @@ function freshMeta() {
   M = freshMeta();
   var refuse = M.equipBlade('phantom'); // verrouillée
   var accept = M.equipBlade('neon');    // par défaut
-  check('d7) equipBlade — refus si verrouillée, accepte si débloquée', refuse === false && accept === true,
+  check('d7) equipBlade — refus si verrouillée, accepte si débloquée',
+    (CONFIG.TEST_ALL_OWNED ? refuse === true : refuse === false) && accept === true,
     'phantom=' + refuse + ' neon=' + accept);
 })();
 
@@ -617,11 +620,12 @@ function firstPaidTheme() {
       'equip void=' + acceptFree);
     return;
   }
-  var refuse = M.equipTheme(paid.id); // non possédé
+  var refuse = M.equipTheme(paid.id); // non possédé (accepté en mode test tout possédé)
   M.addShards(paid.price);
   M.buyTheme(paid.id);
   var accept = M.equipTheme(paid.id); // possédé après achat
-  check('h3) equipTheme — refus si non possédé, ok après achat', refuse === false && accept === true,
+  check('h3) equipTheme — refus si non possédé, ok après achat',
+    (CONFIG.TEST_ALL_OWNED ? refuse === true : refuse === false) && accept === true,
     'sakura(non possédé)=' + refuse + ' sakura(après achat)=' + accept);
 })();
 

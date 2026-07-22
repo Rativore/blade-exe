@@ -253,11 +253,15 @@ var BladeMeta = (function () {
     return { ok: true, shards: s.shards };
   }
 
+  // Mode test « tout possédé » (CONFIG.TEST_ALL_OWNED) : boutique entière
+  // déverrouillée, l'équipement ne vérifie plus la possession.
+  function testAllOwned() { return !!CONFIG.TEST_ALL_OWNED; }
+
   function getBlades() {
     var s = get();
     return CONFIG.BLADES.map(function (b) {
       return Object.assign({}, b, {
-        unlocked: s.blades.unlocked.indexOf(b.id) !== -1,
+        unlocked: testAllOwned() || s.blades.unlocked.indexOf(b.id) !== -1,
         equipped: s.blades.equipped === b.id,
       });
     });
@@ -265,7 +269,7 @@ var BladeMeta = (function () {
 
   function equipBlade(id) {
     var s = get();
-    if (s.blades.unlocked.indexOf(id) === -1) return false;
+    if (!testAllOwned() && s.blades.unlocked.indexOf(id) === -1) return false;
     s.blades.equipped = id;
     persist();
     return true;
@@ -307,7 +311,7 @@ var BladeMeta = (function () {
     var s = get();
     return CONFIG.THEMES.map(function (t) {
       return Object.assign({}, t, {
-        unlocked: t.price === 0 || s.themes.unlocked.indexOf(t.id) !== -1,
+        unlocked: testAllOwned() || t.price === 0 || s.themes.unlocked.indexOf(t.id) !== -1,
         equipped: s.themes.equipped === t.id,
       });
     });
@@ -316,7 +320,7 @@ var BladeMeta = (function () {
   // BladeMeta.equipTheme(id) -> bool (refus si non possédé)
   function equipTheme(id) {
     var s = get();
-    if (!themeFreeById(id) && s.themes.unlocked.indexOf(id) === -1) return false;
+    if (!testAllOwned() && !themeFreeById(id) && s.themes.unlocked.indexOf(id) === -1) return false;
     s.themes.equipped = id;
     persist();
     return true;
