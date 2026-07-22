@@ -377,42 +377,85 @@ var BladeUI = (function () {
   }
   function drawTitleScreen(dt, view) {
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
-    txt("BLADE", W / 2 + jit, H * 0.20, Math.round(MIN * 0.13), C.CY, "center", true);
-    txt(".EXE", W / 2 - jit, H * 0.20 + MIN * 0.11, Math.round(MIN * 0.095), C.MG, "center", true);
-
-    ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
-    txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", W / 2, H * 0.38, Math.round(MIN * 0.030), "#cfefff", "center", false);
-    ctx.restore();
-
     var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
-    txt("VERSION " + verMid, W / 2, H * 0.425, Math.round(MIN * 0.042), C.GOLD, "center", true);
-
     var meta = view.meta || { best: 0, daily: { streak: 0 } };
     var menu = view.menu || { blades: [], bladeIndex: 0, muted: false };
+    var landscape = W > H;
 
-    var bw = MIN * 0.56, bh = MIN * 0.105;
-    var arcadeY = H * 0.46;
-    var dailyY = arcadeY + bh + MIN * 0.05;
-    var bx = W / 2 - bw / 2;
+    if (landscape) {
+      // ---- left column (~40% W) : logo + subtitle + version ----
+      var colX = W * 0.20;
+      txt("BLADE", colX + jit, H * 0.30, Math.round(MIN * 0.16), C.CY, "center", true);
+      txt(".EXE", colX - jit, H * 0.30 + MIN * 0.135, Math.round(MIN * 0.115), C.MG, "center", true);
 
-    drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
-    drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
+      txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", colX, H * 0.60, Math.round(MIN * 0.034), "#cfefff", "center", false);
+      ctx.restore();
 
-    btnRects.TITLE.arcade = { x: bx, y: arcadeY, w: bw, h: bh };
-    btnRects.TITLE.daily = { x: bx, y: dailyY, w: bw, h: bh };
+      txt("VERSION " + verMid, colX, H * 0.70, Math.round(MIN * 0.05), C.GOLD, "center", true);
 
-    // blade selector
-    var rowY = dailyY + bh + MIN * 0.11;
-    var b = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
-    var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
-    txt(label, W / 2, rowY, Math.round(MIN * 0.04), b.glow || C.MG, "center", true);
+      // ---- right column : big buttons + blade selector ----
+      var bw = W * 0.40, bh = H * 0.16;
+      var colRX = W * 0.72;
+      var bx = colRX - bw / 2;
+      var gap = H * 0.055;
+      var totalH = bh * 2 + gap;
+      var arcadeY = H * 0.5 - totalH / 2;
+      var dailyY = arcadeY + bh + gap;
 
-    var prevX = W / 2 - bw * 0.42, nextX = W / 2 + bw * 0.42;
-    var arrowHalf = MIN * 0.05;
-    txt("◀", prevX, rowY, Math.round(MIN * 0.05), "#eafcff", "center", true);
-    txt("▶", nextX, rowY, Math.round(MIN * 0.05), "#eafcff", "center", true);
-    btnRects.TITLE.bladePrev = { x: prevX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
-    btnRects.TITLE.bladeNext = { x: nextX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+      drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
+      drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+
+      btnRects.TITLE.arcade = { x: bx, y: arcadeY, w: bw, h: bh };
+      btnRects.TITLE.daily = { x: bx, y: dailyY, w: bw, h: bh };
+
+      // blade selector below the buttons, arrows spread wide
+      var rowY = dailyY + bh + MIN * 0.15;
+      var b = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
+      var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
+      txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
+
+      var prevX = colRX - bw * 0.58, nextX = colRX + bw * 0.58;
+      var arrowHalf = MIN * 0.06;
+      txt("◀", prevX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
+      txt("▶", nextX, rowY, Math.round(MIN * 0.06), "#eafcff", "center", true);
+      btnRects.TITLE.bladePrev = { x: prevX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+      btnRects.TITLE.bladeNext = { x: nextX - arrowHalf, y: rowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+    } else {
+      // ---- portrait (fenêtre PC) : disposition centrée d'origine ----
+      txt("BLADE", W / 2 + jit, H * 0.20, Math.round(MIN * 0.13), C.CY, "center", true);
+      txt(".EXE", W / 2 - jit, H * 0.20 + MIN * 0.11, Math.round(MIN * 0.095), C.MG, "center", true);
+
+      ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(titleT * 3);
+      txt("GLISSEZ POUR TRANCHER DANS LE BON SENS", W / 2, H * 0.38, Math.round(MIN * 0.030), "#cfefff", "center", false);
+      ctx.restore();
+
+      txt("VERSION " + verMid, W / 2, H * 0.425, Math.round(MIN * 0.042), C.GOLD, "center", true);
+
+      var bw2 = MIN * 0.56, bh2 = MIN * 0.105;
+      var arcadeY2 = H * 0.46;
+      var dailyY2 = arcadeY2 + bh2 + MIN * 0.05;
+      var bx2 = W / 2 - bw2 / 2;
+
+      drawMenuButton(bx2, arcadeY2, bw2, bh2, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
+      drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+
+      btnRects.TITLE.arcade = { x: bx2, y: arcadeY2, w: bw2, h: bh2 };
+      btnRects.TITLE.daily = { x: bx2, y: dailyY2, w: bw2, h: bh2 };
+
+      // blade selector
+      var rowY2 = dailyY2 + bh2 + MIN * 0.11;
+      var b2 = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
+      var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
+      txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
+
+      var prevX2 = W / 2 - bw2 * 0.42, nextX2 = W / 2 + bw2 * 0.42;
+      var arrowHalf2 = MIN * 0.05;
+      txt("◀", prevX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      txt("▶", nextX2, rowY2, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      btnRects.TITLE.bladePrev = { x: prevX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
+      btnRects.TITLE.bladeNext = { x: nextX2 - arrowHalf2, y: rowY2 - arrowHalf2, w: arrowHalf2 * 2, h: arrowHalf2 * 2 };
+    }
 
     // mute toggle
     var mw = 96, mh = 34;
@@ -424,9 +467,37 @@ var BladeUI = (function () {
     txt(menu.muted ? "SON : OFF" : "SON : ON", mx + mw / 2, my + mh / 2, 14, "#eafcff", "center", false);
     btnRects.TITLE.mute = { x: mx, y: my, w: mw, h: mh };
 
-    var ver = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
-    txt("TAP / CLIC POUR CHOISIR  ·  v" + ver, W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
+    txt("TAP / CLIC POUR CHOISIR  ·  v" + verMid, W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
     if (view.debug) txt(view.debug, W / 2, H * 0.905, 12, "#4a8a95", "center", false);
+  }
+
+  // ---------------------------------------------------------------- end-screen buttons (OVER/WIN)
+  // landscape : REJOUER / MENU empilés, plus grands, colonne de droite
+  function drawEndButtonsLandscape(screenKey) {
+    var bw = W * 0.28, bh = H * 0.22, gap = H * 0.06;
+    var colRX = W * 0.80;
+    var rx = colRX - bw / 2;
+    var totalH = bh * 2 + gap;
+    var y0 = H * 0.5 - totalH / 2;
+    var replayY = y0, menuY = y0 + bh + gap;
+
+    drawMenuButton(rx, replayY, bw, bh, "REJOUER", C.CY, null);
+    drawMenuButton(rx, menuY, bw, bh, "MENU", C.MG, null);
+
+    btnRects[screenKey].replay = { x: rx, y: replayY, w: bw, h: bh };
+    btnRects[screenKey].menu = { x: rx, y: menuY, w: bw, h: bh };
+  }
+  // portrait : REJOUER / MENU côte à côte, centrés (disposition d'origine)
+  function drawEndButtonsPortrait(screenKey) {
+    var bw = MIN * 0.36, bh = MIN * 0.105, gap = MIN * 0.04;
+    var y = H * 0.60;
+    var rx = W / 2 - bw - gap / 2, mxB = W / 2 + gap / 2;
+
+    drawMenuButton(rx, y, bw, bh, "REJOUER", C.CY, null);
+    drawMenuButton(mxB, y, bw, bh, "MENU", C.MG, null);
+
+    btnRects[screenKey].replay = { x: rx, y: y, w: bw, h: bh };
+    btnRects[screenKey].menu = { x: mxB, y: y, w: bw, h: bh };
   }
 
   // ---------------------------------------------------------------- over screen
@@ -435,27 +506,23 @@ var BladeUI = (function () {
     var state = view.engineState || { score: 0, maxCombo: 0 };
     var meta = view.meta || { best: 0 };
     var menu = view.menu || { unlockedThisRun: [] };
+    var landscape = W > H;
 
-    txt("SYSTÈME COMPROMIS", W / 2, H * 0.24, Math.round(MIN * 0.065), C.DANGER, "center", true);
-    txt("SCORE " + state.score, W / 2, H * 0.36, Math.round(MIN * 0.06), C.CY, "center", true);
-    txt("RECORD " + (meta.best || 0), W / 2, H * 0.44, Math.round(MIN * 0.04), C.MG, "center", true);
+    var tx = landscape ? W * 0.07 : W / 2;
+    var align = landscape ? "left" : "center";
+
+    txt("SYSTÈME COMPROMIS", tx, H * 0.24, Math.round(MIN * 0.065), C.DANGER, align, true);
+    txt("SCORE " + state.score, tx, H * 0.40, Math.round(MIN * 0.06), C.CY, align, true);
+    txt("RECORD " + (meta.best || 0), tx, H * 0.52, Math.round(MIN * 0.04), C.MG, align, true);
 
     var unlocked = menu.unlockedThisRun || [];
     if (unlocked.length) {
       var names = [];
       for (var i = 0; i < unlocked.length; i++) names.push(bladeName(unlocked[i]));
-      txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), W / 2, H * 0.51, Math.round(MIN * 0.028), C.GOLD, "center", true);
+      txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), tx, H * 0.62, Math.round(MIN * 0.028), C.GOLD, align, true);
     }
 
-    var bw = MIN * 0.36, bh = MIN * 0.105, gap = MIN * 0.04;
-    var y = H * 0.60;
-    var rx = W / 2 - bw - gap / 2, mxB = W / 2 + gap / 2;
-
-    drawMenuButton(rx, y, bw, bh, "REJOUER", C.CY, null);
-    drawMenuButton(mxB, y, bw, bh, "MENU", C.MG, null);
-
-    btnRects.OVER.replay = { x: rx, y: y, w: bw, h: bh };
-    btnRects.OVER.menu = { x: mxB, y: y, w: bw, h: bh };
+    if (landscape) drawEndButtonsLandscape("OVER"); else drawEndButtonsPortrait("OVER");
   }
 
   // ---------------------------------------------------------------- win screen
@@ -465,27 +532,23 @@ var BladeUI = (function () {
     var meta = view.meta || { daily: { streak: 0 } };
     var menu = view.menu || { unlockedThisRun: [] };
     var streak = (meta.daily && meta.daily.streak) || 0;
+    var landscape = W > H;
 
-    txt("DÉFI RÉUSSI", W / 2, H * 0.24, Math.round(MIN * 0.065), C.GOLD, "center", true);
-    txt("SCORE " + state.score, W / 2, H * 0.36, Math.round(MIN * 0.06), C.CY, "center", true);
-    txt("SÉRIE " + streak + " J", W / 2, H * 0.44, Math.round(MIN * 0.04), C.MG, "center", true);
+    var tx = landscape ? W * 0.07 : W / 2;
+    var align = landscape ? "left" : "center";
+
+    txt("DÉFI RÉUSSI", tx, H * 0.24, Math.round(MIN * 0.065), C.GOLD, align, true);
+    txt("SCORE " + state.score, tx, H * 0.40, Math.round(MIN * 0.06), C.CY, align, true);
+    txt("SÉRIE " + streak + " J", tx, H * 0.52, Math.round(MIN * 0.04), C.MG, align, true);
 
     var unlocked = menu.unlockedThisRun || [];
     if (unlocked.length) {
       var names = [];
       for (var i = 0; i < unlocked.length; i++) names.push(bladeName(unlocked[i]));
-      txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), W / 2, H * 0.51, Math.round(MIN * 0.028), C.GOLD, "center", true);
+      txt("LAME(S) DÉBLOQUÉE(S) : " + names.join(", ").toUpperCase(), tx, H * 0.62, Math.round(MIN * 0.028), C.GOLD, align, true);
     }
 
-    var bw = MIN * 0.36, bh = MIN * 0.105, gap = MIN * 0.04;
-    var y = H * 0.60;
-    var rx = W / 2 - bw - gap / 2, mxB = W / 2 + gap / 2;
-
-    drawMenuButton(rx, y, bw, bh, "REJOUER", C.CY, null);
-    drawMenuButton(mxB, y, bw, bh, "MENU", C.MG, null);
-
-    btnRects.WIN.replay = { x: rx, y: y, w: bw, h: bh };
-    btnRects.WIN.menu = { x: mxB, y: y, w: bw, h: bh };
+    if (landscape) drawEndButtonsLandscape("WIN"); else drawEndButtonsPortrait("WIN");
   }
 
   // ---------------------------------------------------------------- orientation overlay
