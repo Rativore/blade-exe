@@ -264,6 +264,18 @@ var BladeAudio = (function () {
       musicBus.gain.value = 0.40 + intensity * 0.18;
       musicLowpass.frequency.value = 1000 + intensity * 8000;
       musicLowpass.Q.value = 0.65;
+    } else if (kind === "sakura") {
+      musicBus.gain.value = 0.30 + intensity * 0.12;
+      musicLowpass.frequency.value = 1400 + intensity * 4000;
+      musicLowpass.Q.value = 0.6;
+    } else if (kind === "midas") {
+      musicBus.gain.value = 0.40 + intensity * 0.15;
+      musicLowpass.frequency.value = 1600 + intensity * 6000;
+      musicLowpass.Q.value = 0.65;
+    } else if (kind === "void") {
+      musicBus.gain.value = 0.34 + intensity * 0.10;
+      musicLowpass.frequency.value = 700 + intensity * 3500;
+      musicLowpass.Q.value = 0.7;
     } else {
       musicBus.gain.value = 0.42 + intensity * 0.18;
       musicLowpass.frequency.value = 1200 + intensity * 9000;
@@ -618,17 +630,300 @@ var BladeAudio = (function () {
     scheduleToxicBlip(step, t);
   }
 
+  // ------------------------------------------------ musique thème SAKURA
+  // Rêveur ~100 BPM, boucle 8 mesures : plucks pentatoniques type koto
+  // (triangle, attaque brève + petit écho sine), pads doux détunés tenus sur
+  // 2 mesures, percussion légère (rim clicks épars, très filtrés).
+  var SAKURA_BPM = 100;
+  var SAKURA_BEAT_DUR = 60 / SAKURA_BPM;
+  var SAKURA_STEP_DUR = SAKURA_BEAT_DUR / 4;
+  var SAKURA_STEPS_PER_BAR = 16;
+  var SAKURA_BARS_PER_LOOP = 8;
+  var SAKURA_TOTAL_STEPS = SAKURA_STEPS_PER_BAR * SAKURA_BARS_PER_LOOP;
+  var SAKURA_ROOT = 220;                       // A3
+  var SAKURA_SCALE = [0, 2, 3, 7, 8, 12];       // penta type hirajoshi (koto)
+  var SAKURA_CHORD_ROOTS = [0, 7, 3, 8];        // 4 accords, 2 mesures chacun
+
+  var sakuraRng = mulberry32(20260728);
+  var SAKURA_PLUCK_GATE = [];
+  var SAKURA_PLUCK_IDX = [];
+  (function () {
+    for (var i = 0; i < SAKURA_TOTAL_STEPS; i++) {
+      SAKURA_PLUCK_GATE.push(sakuraRng());
+      SAKURA_PLUCK_IDX.push(Math.floor(sakuraRng() * SAKURA_SCALE.length));
+    }
+  })();
+  var SAKURA_RIM_GATE = [];
+  (function () {
+    for (var i = 0; i < SAKURA_TOTAL_STEPS; i++) SAKURA_RIM_GATE.push(sakuraRng());
+  })();
+
+  function scheduleSakuraPluck(freq, t, dur) {
+    if (!musicBus) return;
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(freq, t);
+    var peak = 0.13 + intensity * 0.05;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(musicBus);
+    o.start(t); o.stop(t + dur + 0.05);
+    // petit écho (une répétition plus douce, décalée)
+    var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.type = "sine";
+    var echoT = t + dur * 0.55;
+    o2.frequency.setValueAtTime(freq, echoT);
+    var echoPeak = 0.045 + intensity * 0.015;
+    g2.gain.setValueAtTime(0.0001, echoT);
+    g2.gain.exponentialRampToValueAtTime(echoPeak, echoT + 0.008);
+    g2.gain.exponentialRampToValueAtTime(0.0001, echoT + dur);
+    o2.connect(g2); g2.connect(musicBus);
+    o2.start(echoT); o2.stop(echoT + dur + 0.05);
+  }
+
+  function scheduleSakuraPad(rootSemis, t, dur) {
+    if (!musicBus) return;
+    var tones = [rootSemis, rootSemis + 7, rootSemis + 12];
+    for (var i = 0; i < tones.length; i++) {
+      var freq = SAKURA_ROOT * Math.pow(2, tones[i] / 12);
+      var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      var g = ctx.createGain();
+      o1.type = "sine"; o2.type = "sine";
+      o1.detune.setValueAtTime(-5, t); o2.detune.setValueAtTime(5, t);
+      o1.frequency.setValueAtTime(freq, t); o2.frequency.setValueAtTime(freq, t);
+      var peak = 0.045 + intensity * 0.015;
+      var atk = Math.min(1.4, dur * 0.35), rel = Math.min(1.2, dur * 0.3);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + atk);
+      g.gain.setValueAtTime(peak, t + dur - rel);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o1.connect(g); o2.connect(g); g.connect(musicBus);
+      o1.start(t); o2.start(t);
+      o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+    }
+  }
+
+  function scheduleSakuraRim(t) {
+    noiseBurst(0.02, { filterType: "highpass", freq: 5200, q: 1.4, gain: 0.07 + intensity * 0.03, dest: musicBus, time: t });
+  }
+
+  function scheduleSakuraStep(step, t) {
+    var posInBar = step % SAKURA_STEPS_PER_BAR;
+    var bar = Math.floor(step / SAKURA_STEPS_PER_BAR) % SAKURA_BARS_PER_LOOP;
+    var rootSemis = SAKURA_CHORD_ROOTS[Math.floor(bar / 2) % SAKURA_CHORD_ROOTS.length];
+    if (posInBar === 0 && bar % 2 === 0) {
+      scheduleSakuraPad(rootSemis, t, SAKURA_BEAT_DUR * SAKURA_STEPS_PER_BAR * 2 - 0.05);
+    }
+    var pluckDensity = 0.22 + intensity * 0.25;
+    if (SAKURA_PLUCK_GATE[step] < pluckDensity) {
+      var semis = rootSemis + SAKURA_SCALE[SAKURA_PLUCK_IDX[step]];
+      var freq = SAKURA_ROOT * Math.pow(2, semis / 12);
+      scheduleSakuraPluck(freq, t, SAKURA_STEP_DUR * 3);
+    }
+    var rimDensity = 0.05 + intensity * 0.12;
+    if ((posInBar % 4) === 2 && SAKURA_RIM_GATE[step] < rimDensity) {
+      scheduleSakuraRim(t);
+    }
+  }
+
+  // ------------------------------------------------- musique thème MIDAS
+  // Opulent ~110 BPM, boucle 4 mesures : stabs cuivrés (saw + filtre lowpass
+  // façon souffle de cuivre) sur les temps forts, basse ronde legato, nappes
+  // majestueuses, shaker (bruit highpass doux) régulier.
+  var MIDAS_BPM = 110;
+  var MIDAS_BEAT_DUR = 60 / MIDAS_BPM;
+  var MIDAS_STEP_DUR = MIDAS_BEAT_DUR / 4;
+  var MIDAS_STEPS_PER_BAR = 16;
+  var MIDAS_BARS_PER_LOOP = 4;
+  var MIDAS_TOTAL_STEPS = MIDAS_STEPS_PER_BAR * MIDAS_BARS_PER_LOOP;
+  var MIDAS_ROOT = 261.63;        // C4 (stabs/pads)
+  var MIDAS_BASS_ROOT = 65.41;    // C2
+  // accords majeurs riches (I - IV - V - I), root + tierce + quinte + octave
+  var MIDAS_CHORDS = [[0, 4, 7, 12], [5, 9, 12, 17], [7, 11, 14, 19], [0, 4, 7, 12]];
+
+  var midasRng = mulberry32(20260729);
+  var MIDAS_SHAKER_PLAN = [];
+  (function () {
+    for (var i = 0; i < MIDAS_STEPS_PER_BAR; i++) MIDAS_SHAKER_PLAN.push(midasRng());
+  })();
+
+  function scheduleMidasStab(tones, t, dur) {
+    if (!musicBus) return;
+    var filt = ctx.createBiquadFilter();
+    filt.type = "lowpass";
+    filt.Q.value = 1.4;
+    var g = ctx.createGain();
+    filt.connect(g); g.connect(musicBus);
+    var peakCut = 3200 + intensity * 2600;
+    filt.frequency.setValueAtTime(500, t);
+    filt.frequency.linearRampToValueAtTime(peakCut, t + 0.035);
+    filt.frequency.exponentialRampToValueAtTime(700, t + dur);
+    var peak = 0.22 + intensity * 0.08;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    for (var i = 0; i < tones.length; i++) {
+      var o = ctx.createOscillator();
+      o.type = "sawtooth";
+      var freq = MIDAS_ROOT * Math.pow(2, tones[i] / 12);
+      o.frequency.setValueAtTime(freq, t);
+      o.connect(filt);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+  }
+
+  function scheduleMidasBass(rootSemis, t, dur) {
+    tone(MIDAS_BASS_ROOT * Math.pow(2, rootSemis / 12), dur,
+      { type: "triangle", gain: 0.4 + intensity * 0.06, attack: 0.03, dest: musicBus, time: t });
+  }
+
+  function scheduleMidasPad(tones, t, dur) {
+    if (!musicBus) return;
+    for (var i = 0; i < tones.length; i++) {
+      var freq = MIDAS_ROOT * Math.pow(2, tones[i] / 12);
+      var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      var g = ctx.createGain();
+      o1.type = "sawtooth"; o2.type = "sawtooth";
+      o1.detune.setValueAtTime(-11, t); o2.detune.setValueAtTime(11, t);
+      o1.frequency.setValueAtTime(freq, t); o2.frequency.setValueAtTime(freq, t);
+      var peak = 0.05 + intensity * 0.02;
+      var atk = Math.min(1.2, dur * 0.3), rel = Math.min(1.0, dur * 0.25);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + atk);
+      g.gain.setValueAtTime(peak, t + dur - rel);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o1.connect(g); o2.connect(g); g.connect(musicBus);
+      o1.start(t); o2.start(t);
+      o1.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+    }
+  }
+
+  function scheduleMidasShaker(t, gainMul) {
+    noiseBurst(0.032, { filterType: "highpass", freq: 5000 + intensity * 2000, q: 0.6,
+      gain: (0.10 + intensity * 0.05) * gainMul, dest: musicBus, time: t });
+  }
+
+  function scheduleMidasStep(step, t) {
+    var posInBar = step % MIDAS_STEPS_PER_BAR;
+    var bar = Math.floor(step / MIDAS_STEPS_PER_BAR) % MIDAS_BARS_PER_LOOP;
+    var chord = MIDAS_CHORDS[bar];
+    if (posInBar === 0) {
+      scheduleMidasBass(chord[0], t, MIDAS_BEAT_DUR * MIDAS_STEPS_PER_BAR * 0.24);
+      scheduleMidasPad(chord, t, MIDAS_BEAT_DUR * MIDAS_STEPS_PER_BAR * 0.95);
+    }
+    if (posInBar === 0 || posInBar === 8) scheduleMidasStab(chord, t, MIDAS_BEAT_DUR * 1.6);
+    if (posInBar % 2 === 0) {
+      scheduleMidasShaker(t, 1);
+    } else {
+      var density = 0.15 + intensity * 0.55;
+      if (MIDAS_SHAKER_PLAN[posInBar] < density) scheduleMidasShaker(t, 0.7);
+    }
+  }
+
+  // -------------------------------------------------- musique thème VOID
+  // Minimal sombre ~120 BPM, boucle 8 mesures : kick sec un temps sur deux,
+  // drone grave continu (sine + quinte très bas volume) ducké par le kick,
+  // clicks/blips très épars avec échos longs décroissants (répétitions
+  // programmées simulant un feedback), beaucoup de silence.
+  var VOID_BPM = 120;
+  var VOID_BEAT_DUR = 60 / VOID_BPM;
+  var VOID_STEP_DUR = VOID_BEAT_DUR / 4;
+  var VOID_STEPS_PER_BAR = 16;
+  var VOID_BARS_PER_LOOP = 8;
+  var VOID_TOTAL_STEPS = VOID_STEPS_PER_BAR * VOID_BARS_PER_LOOP;
+  var VOID_BASS_ROOT = 32.70; // C1
+
+  var voidRng = mulberry32(20260730);
+  var VOID_BLIP_GATE = [];
+  var VOID_BLIP_FREQ = [];
+  (function () {
+    for (var i = 0; i < VOID_TOTAL_STEPS; i++) {
+      VOID_BLIP_GATE.push(voidRng());
+      VOID_BLIP_FREQ.push(voidRng());
+    }
+  })();
+
+  function scheduleVoidKick(t) {
+    tone(130, 0.28, { type: "sine", toFreq: 38, gain: 0.85, attack: 0.001, dest: musicBus, time: t });
+    if (duckGain) {
+      try {
+        duckGain.gain.cancelScheduledValues(t);
+        duckGain.gain.setValueAtTime(1, t);
+        duckGain.gain.setValueAtTime(0.25, t + 0.001);
+        duckGain.gain.exponentialRampToValueAtTime(1, t + VOID_BEAT_DUR * 1.6);
+      } catch (err) { /* noop */ }
+    }
+  }
+
+  function scheduleVoidDrone(t, dur) {
+    if (!duckGain) return;
+    var o1 = ctx.createOscillator(), g1 = ctx.createGain();
+    o1.type = "sine";
+    o1.frequency.setValueAtTime(VOID_BASS_ROOT, t);
+    var peak1 = 0.16 + intensity * 0.04;
+    g1.gain.setValueAtTime(0.0001, t);
+    g1.gain.linearRampToValueAtTime(peak1, t + dur * 0.25);
+    g1.gain.setValueAtTime(peak1, t + dur * 0.75);
+    g1.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o1.connect(g1); g1.connect(duckGain);
+    o1.start(t); o1.stop(t + dur + 0.05);
+
+    var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.type = "sine";
+    o2.frequency.setValueAtTime(VOID_BASS_ROOT * Math.pow(2, 7 / 12), t); // quinte
+    var peak2 = 0.04 + intensity * 0.015; // très bas volume
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.linearRampToValueAtTime(peak2, t + dur * 0.25);
+    g2.gain.setValueAtTime(peak2, t + dur * 0.75);
+    g2.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o2.connect(g2); g2.connect(duckGain);
+    o2.start(t); o2.stop(t + dur + 0.05);
+  }
+
+  function scheduleVoidBlip(step, t) {
+    var density = 0.025 + intensity * 0.055; // beaucoup de silence
+    if (VOID_BLIP_GATE[step] >= density) return;
+    var freq = 900 + VOID_BLIP_FREQ[step] * 2600;
+    // échos longs décroissants programmés (feedback simulé)
+    var echoes = [
+      { delay: 0,     gain: 0.15 },
+      { delay: 0.22,  gain: 0.075 },
+      { delay: 0.44,  gain: 0.037 },
+      { delay: 0.66,  gain: 0.018 },
+      { delay: 0.88,  gain: 0.009 }
+    ];
+    for (var i = 0; i < echoes.length; i++) {
+      var e = echoes[i];
+      var g = (0.6 + intensity * 0.4) * e.gain;
+      tone(freq, 0.11, { type: "sine", toFreq: freq * 0.7, gain: g, attack: 0.002, dest: musicBus, time: t + e.delay });
+    }
+  }
+
+  function scheduleVoidStep(step, t) {
+    var posInBar = step % VOID_STEPS_PER_BAR;
+    if (posInBar === 0 || posInBar === 8) scheduleVoidKick(t);
+    if (posInBar === 0) scheduleVoidDrone(t, VOID_BEAT_DUR * VOID_STEPS_PER_BAR - 0.02);
+    scheduleVoidBlip(step, t);
+  }
+
   function schedulerTick() {
     if (!ctx || !musicPlaying) return;
     var stepDur, totalSteps;
     if (musicKind === "menu") { stepDur = MENU_STEP_DUR; totalSteps = MENU_TOTAL_STEPS; }
     else if (musicKind === "inferno") { stepDur = INFERNO_STEP_DUR; totalSteps = INFERNO_TOTAL_STEPS; }
     else if (musicKind === "toxic") { stepDur = TOXIC_STEP_DUR; totalSteps = TOXIC_TOTAL_STEPS; }
+    else if (musicKind === "sakura") { stepDur = SAKURA_STEP_DUR; totalSteps = SAKURA_TOTAL_STEPS; }
+    else if (musicKind === "midas") { stepDur = MIDAS_STEP_DUR; totalSteps = MIDAS_TOTAL_STEPS; }
+    else if (musicKind === "void") { stepDur = VOID_STEP_DUR; totalSteps = VOID_TOTAL_STEPS; }
     else { stepDur = STEP16_DUR; totalSteps = TOTAL_STEPS; }
     while (nextNoteTime < ctx.currentTime + SCHED_AHEAD) {
       if (musicKind === "menu") scheduleMenuStep(currentStep, nextNoteTime);
       else if (musicKind === "inferno") scheduleInfernoStep(currentStep, nextNoteTime);
       else if (musicKind === "toxic") scheduleToxicStep(currentStep, nextNoteTime);
+      else if (musicKind === "sakura") scheduleSakuraStep(currentStep, nextNoteTime);
+      else if (musicKind === "midas") scheduleMidasStep(currentStep, nextNoteTime);
+      else if (musicKind === "void") scheduleVoidStep(currentStep, nextNoteTime);
       else scheduleStep(currentStep, nextNoteTime);
       nextNoteTime += stepDur;
       currentStep = (currentStep + 1) % totalSteps;
@@ -663,8 +958,9 @@ var BladeAudio = (function () {
 
   // kind : 'menu' (nappe calme écran titre) | 'game' (défaut si omis, boucle
   // hyperpop inchangée) | 'inferno' (industriel, monde INFERNO.SYS) | 'toxic'
-  // (acid, monde TOXIC.SECTOR)
-  var MUSIC_KINDS = { menu: 1, game: 1, inferno: 1, toxic: 1 };
+  // (acid, monde TOXIC.SECTOR) | 'sakura' (rêveur, thème SAKURA) | 'midas'
+  // (opulent, thème MIDAS) | 'void' (minimal sombre, thème VOID)
+  var MUSIC_KINDS = { menu: 1, game: 1, inferno: 1, toxic: 1, sakura: 1, midas: 1, void: 1 };
   function startMusic(kind) {
     kind = MUSIC_KINDS[kind] ? kind : "game";
     if (!hasAudio) return;
@@ -688,8 +984,9 @@ var BladeAudio = (function () {
     teardownMusicChain(false);
   }
 
-  // Pilote 'game', 'inferno' et 'toxic' (densité percussions via `intensity`
-  // + ouverture du filtre + léger gain) ; sans effet pendant la nappe 'menu'.
+  // Pilote 'game', 'inferno', 'toxic', 'sakura', 'midas' et 'void' (densité
+  // des éléments via `intensity` + ouverture du filtre + léger gain) ; sans
+  // effet pendant la nappe 'menu'.
   function setMusicIntensity(i) {
     intensity = Math.max(0, Math.min(1, i));
     if (musicKind === "menu") return;
@@ -702,6 +999,15 @@ var BladeAudio = (function () {
     } else if (musicKind === "toxic") {
       lpFreq = 1000 + intensity * 8000;
       busGain = 0.40 + intensity * 0.18;
+    } else if (musicKind === "sakura") {
+      lpFreq = 1400 + intensity * 4000;
+      busGain = 0.30 + intensity * 0.12;
+    } else if (musicKind === "midas") {
+      lpFreq = 1600 + intensity * 6000;
+      busGain = 0.40 + intensity * 0.15;
+    } else if (musicKind === "void") {
+      lpFreq = 700 + intensity * 3500;
+      busGain = 0.34 + intensity * 0.10;
     } else {
       lpFreq = 1200 + intensity * 9000;
       busGain = 0.42 + intensity * 0.18;

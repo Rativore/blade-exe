@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.17',            // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.18',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -144,15 +144,15 @@ var CONFIG = {
   THEMES: [
     { id: 'grid',   name: 'GRID',   price: 0,
       theme: null }, // null = DA de base (CONFIG.COLORS)
-    // ⚠️ PHASE DE TEST (2026-07-23) : prix à 0 pour que le client essaie les
-    // thèmes. Prix définitifs à rétablir : SAKURA 3000, MIDAS 6000, VOID 12000.
-    { id: 'sakura', name: 'SAKURA', price: 0,
+    // Chaque thème a sa musique (kind BladeAudio) : équipée, elle remplace le
+    // couple menu+game PARTOUT hors niveaux. GRID = musiques d'origine.
+    { id: 'sakura', name: 'SAKURA', price: 3000, music: 'sakura',
       theme: { BG: '#0a0308', GRID1: '#ff8ac2', GRID2: '#ffffff',
                HUE_A: '#ff8ac2', HUE_B: '#ffffff', DANGER: '#7dff00', TEXT: '#ffeef7' } },
-    { id: 'midas',  name: 'MIDAS',  price: 0,
+    { id: 'midas',  name: 'MIDAS',  price: 6000, music: 'midas',
       theme: { BG: '#0a0800', GRID1: '#ffd000', GRID2: '#ff9500',
                HUE_A: '#ffd000', HUE_B: '#ff9500', DANGER: '#00f0ff', TEXT: '#fff8dc' } },
-    { id: 'void',   name: 'VOID',   price: 0,
+    { id: 'void',   name: 'VOID',   price: 12000, music: 'void',
       theme: { BG: '#000000', GRID1: '#ffffff', GRID2: '#7a7a7a',
                HUE_A: '#ffffff', HUE_B: '#9adcff', DANGER: '#ff2b4a', TEXT: '#ffffff' } },
   ],
@@ -170,6 +170,15 @@ var CONFIG = {
     { id: 'ronin',   name: 'RÔNIN',   outer: 'rgba(255,106,0,0.5)',  inner: '#ffe8d0', glow: '#ff6a00', unlock: { type: 'shop',   price: 2500 } },
     { id: 'azur',    name: 'AZUR',    outer: 'rgba(41,121,255,0.5)', inner: '#dceaff', glow: '#2979ff', unlock: { type: 'shop',   price: 4000 } },
     { id: 'omega',   name: 'OMÉGA',   outer: 'rgba(255,242,176,0.55)',inner: '#ffffff', glow: '#fff2b0', unlock: { type: 'shop',  price: 8000 } },
+    // Sabres MULTICOLORES : colors = teintes qui se succèdent le long de la
+    // traînée (rendu : chaque segment prend la couleur suivante du cycle,
+    // 2 passes conservées — outer/inner/glow servent de base + halo).
+    { id: 'bifrost', name: 'BIFROST', outer: 'rgba(0,240,255,0.5)',  inner: '#ffffff', glow: '#00f0ff',
+      colors: ['#00f0ff', '#ff1fd0'],                                              unlock: { type: 'shop', price: 1500 } },
+    { id: 'prisme',  name: 'PRISME',  outer: 'rgba(255,255,255,0.45)',inner: '#ffffff', glow: '#ffffff',
+      colors: ['#ff2b4a', '#ff9500', '#ffd000', '#39ff14', '#00f0ff', '#a26bff'],  unlock: { type: 'shop', price: 3000 } },
+    { id: 'nebula',  name: 'NEBULA',  outer: 'rgba(162,107,255,0.5)', inner: '#f0e8ff', glow: '#a26bff',
+      colors: ['#a26bff', '#2979ff', '#ff8ac2'],                                   unlock: { type: 'shop', price: 5000 } },
     { id: 'glitch',  name: 'GLITCH',  outer: 'rgba(255,43,74,0.5)',  inner: '#ffe0e6', glow: '#ff2b4a', unlock: { type: 'streak', value: 3 } },
     { id: 'phantom', name: 'PHANTOM', outer: 'rgba(255,255,255,0.4)',inner: '#ffffff', glow: '#ffffff', unlock: { type: 'streak', value: 7 } },
   ],
@@ -348,6 +357,13 @@ var CONFIG = {
  * BladeAudio.startMusic(kind) / BladeAudio.stopMusic()
  *   kind 'menu' : nappe synthwave calme (~90 BPM, pads détunés + arpège lent +
  *   sub discret, boucle 8 mesures) pour l'écran titre.
+ *   kind 'sakura' : rêveur ~100 BPM — plucks pentatoniques (koto synthétique),
+ *   pads doux, percussions légères (thème SAKURA).
+ *   kind 'midas' : opulent ~110 BPM — stabs cuivrés saw, basse ronde, nappes
+ *   majestueuses, shakers dorés (thème MIDAS).
+ *   kind 'void' : minimal sombre ~120 BPM — kick sec espacé, drone grave,
+ *   clicks épars, grande réverbération feinte par échos (thème VOID).
+ *   setMusicIntensity s'applique aussi à ces trois kinds.
  *   kind 'inferno' : industriel agressif ~150 BPM — kick lourd, basse saw
  *   distordue (waveshaper), hats métalliques, stabs graves (monde INFERNO.SYS).
  *   kind 'toxic' : acid ~140 BPM — basse résonante type 303 (lowpass Q élevé
@@ -412,7 +428,10 @@ var CONFIG = {
  *   équipée), bannière de vague, flash rouge, glitchOverlay, slow-mo teinté.
  * BladeUI.onEvents(events)     // slice/wrong/virus/... → moitiés, particules, flashs
  * BladeUI.strokePoint(x,y) / BladeUI.strokeEnd()   // alimente la traînée cosmétique
- * BladeUI.setBlade(bladeDef)   // couleurs de la traînée
+ * BladeUI.setBlade(bladeDef)   // couleurs de la traînée ; si bladeDef.colors
+ *   (tableau) : traînée MULTICOLORE — chaque segment prend la couleur suivante
+ *   du cycle (dégradé le long de la lame), halo = glow ; l'aperçu boutique
+ *   rend le même dégradé
  * Écrans : TITLE = logo glitché + ARCADE / DÉFI DU JOUR (+ série, record) +
  * sélecteur de lame + bouton son ; OVER = SYSTÈME COMPROMIS, score, record,
  * lames débloquées ce run, REJOUER + MENU. Boutons = zones cliquables que
@@ -450,6 +469,10 @@ var CONFIG = {
  * mode niveaux (boot, menus, arcade, défi) — les niveaux imposent la DA de
  * leur monde et le retour menu/fin de run restaure le thème équipé (plus
  * jamais setTheme(null) en dur : toujours setTheme(equippedTheme())).
+ * MUSIQUE DU THÈME : si le thème équipé a un champ music, ce kind remplace
+ * 'menu' ET 'game' partout hors niveaux (helper menuMusicKind()/gameMusicKind()
+ * dans main.js) ; GRID (sans music) = comportement d'origine ; changer de
+ * thème en boutique bascule la musique immédiatement.
  * Fin de run : menu.shardsEarnedThisRun = recordRun().shardsEarned (affiché
  * sur OVER/WIN) ; musique menu conservée sur SHOP.
  * PUB (view.adOffers, fourni par main.js) : OVER — bouton « CONTINUER (PUB) »

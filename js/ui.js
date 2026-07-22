@@ -56,6 +56,13 @@ var BladeUI = (function () {
     return "rgba(" + r + "," + g + "," + b + "," + a + ")";
   }
   function colorFor(hue) { return hue === "MG" ? C.MG : C.CY; }
+  function lightenHex(hex, amt) {
+    var v = hex.replace("#", "");
+    if (v.length === 3) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+    var r = parseInt(v.substr(0, 2), 16), g = parseInt(v.substr(2, 2), 16), b = parseInt(v.substr(4, 2), 16);
+    r = Math.round(r + (255 - r) * amt); g = Math.round(g + (255 - g) * amt); b = Math.round(b + (255 - b) * amt);
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
   function bladeName(id) {
     if (typeof CONFIG === "undefined") return id;
     for (var i = 0; i < CONFIG.BLADES.length; i++) {
@@ -309,13 +316,28 @@ var BladeUI = (function () {
     if (trail.length < 2) return;
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (var pass = 0; pass < 2; pass++) {
-      ctx.beginPath();
-      ctx.moveTo(trail[0].x, trail[0].y);
-      for (var i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
-      if (pass === 0) { ctx.strokeStyle = blade.outer; ctx.lineWidth = 16; ctx.shadowBlur = 24; ctx.shadowColor = blade.glow; }
-      else { ctx.strokeStyle = blade.inner; ctx.lineWidth = 4; ctx.shadowBlur = 12; ctx.shadowColor = blade.glow; }
-      ctx.stroke();
+    if (blade.colors && blade.colors.length) {
+      var cols = blade.colors;
+      for (var pass = 0; pass < 2; pass++) {
+        for (var i = 1; i < trail.length; i++) {
+          var col = cols[i % cols.length];
+          ctx.beginPath();
+          ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+          ctx.lineTo(trail[i].x, trail[i].y);
+          if (pass === 0) { ctx.strokeStyle = hexToRgba(col, 0.5); ctx.lineWidth = 16; ctx.shadowBlur = 24; ctx.shadowColor = col; }
+          else { ctx.strokeStyle = lightenHex(col, 0.65); ctx.lineWidth = 4; ctx.shadowBlur = 12; ctx.shadowColor = col; }
+          ctx.stroke();
+        }
+      }
+    } else {
+      for (var pass2 = 0; pass2 < 2; pass2++) {
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x, trail[0].y);
+        for (var j = 1; j < trail.length; j++) ctx.lineTo(trail[j].x, trail[j].y);
+        if (pass2 === 0) { ctx.strokeStyle = blade.outer; ctx.lineWidth = 16; ctx.shadowBlur = 24; ctx.shadowColor = blade.glow; }
+        else { ctx.strokeStyle = blade.inner; ctx.lineWidth = 4; ctx.shadowBlur = 12; ctx.shadowColor = blade.glow; }
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -330,13 +352,28 @@ var BladeUI = (function () {
     }
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (var pass = 0; pass < 2; pass++) {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
-      if (pass === 0) { ctx.strokeStyle = b.outer; ctx.lineWidth = Math.max(10, r * 0.22); ctx.shadowBlur = 26; ctx.shadowColor = b.glow; }
-      else { ctx.strokeStyle = b.inner; ctx.lineWidth = Math.max(3, r * 0.07); ctx.shadowBlur = 14; ctx.shadowColor = b.glow; }
-      ctx.stroke();
+    if (b.colors && b.colors.length) {
+      var cols = b.colors;
+      for (var pass = 0; pass < 2; pass++) {
+        for (var i = 1; i < pts.length; i++) {
+          var col = cols[i % cols.length];
+          ctx.beginPath();
+          ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+          ctx.lineTo(pts[i].x, pts[i].y);
+          if (pass === 0) { ctx.strokeStyle = hexToRgba(col, 0.5); ctx.lineWidth = Math.max(10, r * 0.22); ctx.shadowBlur = 26; ctx.shadowColor = col; }
+          else { ctx.strokeStyle = lightenHex(col, 0.65); ctx.lineWidth = Math.max(3, r * 0.07); ctx.shadowBlur = 14; ctx.shadowColor = col; }
+          ctx.stroke();
+        }
+      }
+    } else {
+      for (var pass2 = 0; pass2 < 2; pass2++) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+        if (pass2 === 0) { ctx.strokeStyle = b.outer; ctx.lineWidth = Math.max(10, r * 0.22); ctx.shadowBlur = 26; ctx.shadowColor = b.glow; }
+        else { ctx.strokeStyle = b.inner; ctx.lineWidth = Math.max(3, r * 0.07); ctx.shadowBlur = 14; ctx.shadowColor = b.glow; }
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }

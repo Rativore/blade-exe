@@ -78,10 +78,24 @@
     menu.dailyDone = !!(meta.daily && meta.daily.lastDate === BladeMeta.todayStr());
   }
   refreshMeta(); // état initial (dailyDone au lancement)
-  function equippedTheme() {
+  function equippedThemeDef() {
     var themes = menu.themes || [];
-    for (var i = 0; i < themes.length; i++) { if (themes[i].equipped) return themes[i].theme; }
+    for (var i = 0; i < themes.length; i++) { if (themes[i].equipped) return themes[i]; }
     return null;
+  }
+  function equippedTheme() {
+    var def = equippedThemeDef();
+    return def ? def.theme : null;
+  }
+  // musique du thème équipé (hors mode niveaux) : si le thème a un champ music,
+  // ce kind remplace 'menu'/'game' partout ; GRID (sans music) = comportement d'origine
+  function menuMusicKind() {
+    var def = equippedThemeDef();
+    return (def && def.music) ? def.music : "menu";
+  }
+  function gameMusicKind() {
+    var def = equippedThemeDef();
+    return (def && def.music) ? def.music : "game";
   }
   BladeUI.setTheme(equippedTheme()); // thème équipé appliqué dès le boot
 
@@ -98,7 +112,7 @@
     var size = BladeUI.resize();
     engine = BladeEngine.create({ mode: mode, seed: seed, viewport: { w: size.w, h: size.h } });
     setScreen("PLAY");
-    BladeAudio.startMusic("game");
+    BladeAudio.startMusic(gameMusicKind());
   }
 
   function handleRunEnd(e, nextScreen) {
@@ -111,7 +125,7 @@
     menu.shardsEarnedThisRun = res.shardsEarned || 0;
     BladeUI.setTheme(equippedTheme());
     BladeAudio.stopMusic();
-    BladeAudio.startMusic("menu");
+    BladeAudio.startMusic(menuMusicKind());
     setScreen(nextScreen);
     BladeAds.registerRunEnd({ won: nextScreen === "WIN" });
   }
@@ -138,7 +152,7 @@
         pendingEnd = null;
         engine.revive();
         setScreen("PLAY");
-        BladeAudio.startMusic("game");
+        BladeAudio.startMusic(gameMusicKind());
       } else {
         finalizePendingEnd();
       }
@@ -207,7 +221,7 @@
       shardsEarned: shardsEarned, hasNext: hasNext
     };
     BladeAudio.stopMusic();
-    BladeAudio.startMusic("menu");
+    BladeAudio.startMusic(menuMusicKind());
     setScreen("LEVELEND");
     BladeAds.registerRunEnd({ won: success && stars === 3 });
   }
@@ -296,7 +310,7 @@
         }
         break;
       case "menu":
-        BladeAudio.play("click"); BladeUI.setTheme(equippedTheme()); BladeAudio.stopMusic(); BladeAudio.startMusic("menu");
+        BladeAudio.play("click"); BladeUI.setTheme(equippedTheme()); BladeAudio.stopMusic(); BladeAudio.startMusic(menuMusicKind());
         refreshMeta(); setScreen("TITLE"); break;
       case "mute":
         BladeAudio.setMuted(!BladeAudio.muted);
@@ -364,6 +378,9 @@
     if (ok) {
       BladeUI.setTheme(t.theme);
       refreshMeta();
+      // bascule immédiate de la musique du thème équipé
+      BladeAudio.stopMusic();
+      BladeAudio.startMusic(menuMusicKind());
     }
   }
 
@@ -381,7 +398,7 @@
     BladeAudio.unlock();
     updatePortraitBlocked(); // recalcul frais : les events resize/orientationchange d'iOS arrivent parfois avec des dimensions périmées
     if (isTouch && !landscapeLockTried) { landscapeLockTried = true; tryLockLandscape(); }
-    if (screen === "TITLE") BladeAudio.startMusic("menu");
+    if (screen === "TITLE") BladeAudio.startMusic(menuMusicKind());
     if (portraitBlocked) return; // input jeu bloqué, le déblocage audio ci-dessus reste actif
     var p = getXY(e);
     if (screen === "PLAY") {
@@ -390,7 +407,7 @@
         if (currentMode === "level") {
           overHandled = true;
           BladeAudio.stopMusic();
-          BladeAudio.startMusic("menu");
+          BladeAudio.startMusic(menuMusicKind());
           setScreen("LEVELS");
         } else {
           handleRunEnd({ score: engine.state.score, maxCombo: engine.state.maxCombo }, "TITLE");
