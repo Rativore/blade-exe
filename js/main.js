@@ -111,6 +111,7 @@
   function continueOfferAvailable() {
     return currentMode === "arcade" &&
       typeof CONFIG !== "undefined" && CONFIG.ADS && CONFIG.ADS.ENABLED &&
+      (CONFIG.ADS.CONTINUE_PER_RUN || 0) > 0 &&
       !continueUsedThisRun &&
       !!engine && typeof engine.revive === "function";
   }

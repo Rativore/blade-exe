@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.5',             // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.6',             // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -101,7 +101,10 @@ var CONFIG = {
     INTERSTITIAL_MIN_GAMES: 5,  // jamais avant N parties jouées au total (save.gamesPlayed)
     INTERSTITIAL_COOLDOWN: 120, // s minimum entre deux interstitiels
     NO_AD_AFTER_WIN: true,      // jamais d'interstitiel après dailyWin ou 3★
-    CONTINUE_PER_RUN: 1,        // « Continuer (pub) » max par partie (arcade seulement)
+    CONTINUE_PER_RUN: 0,        // « Continuer (pub) » DÉSACTIVÉ (choix client
+                                // 2026-07-23 : au game over, uniquement REJOUER
+                                // et MENU, l'interstitiel passe avant) ; remettre
+                                // 1 pour réactiver l'offre — le code reste en place
     DAILY_X2: true,             // « ×2 éclats (pub) » sur l'écran DÉFI RÉUSSI
     BANNER: true,               // bandeau simulé en haut du menu TITLE uniquement
     BANNER_HEIGHT: 50,          // px
