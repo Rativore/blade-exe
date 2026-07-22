@@ -28,7 +28,7 @@ var BladeUI = (function () {
   var glitch = 0, redFlash = 0;
   var gridT = 0, titleT = 0;
 
-  var btnRects = { TITLE: {}, OVER: {}, WIN: {}, PLAY: {} };
+  var btnRects = { TITLE: {}, OVER: {}, WIN: {}, PLAY: {}, SHOP: {} };
 
   // ---------------------------------------------------------------- helpers
   function hexToRgba(hex, a) {
@@ -44,6 +44,24 @@ var BladeUI = (function () {
       if (CONFIG.BLADES[i].id === id) return CONFIG.BLADES[i].name;
     }
     return id;
+  }
+  function currencySymbol() {
+    return (typeof CONFIG !== "undefined" && CONFIG.ECONOMY && CONFIG.ECONOMY.SYMBOL) ? CONFIG.ECONOMY.SYMBOL : "◆";
+  }
+  // status/contextual action for a shop blade entry ({...blade, unlocked, equipped})
+  function bladeStatus(b, shards) {
+    if (!b) return { text: "", color: C.TEXT, action: null, label: null, disabled: true };
+    if (b.equipped) return { text: "ÉQUIPÉE", color: C.GOLD, action: null, label: null, disabled: true };
+    if (b.unlocked) return { text: "POSSÉDÉE", color: C.CY, action: "equip", label: "ÉQUIPER", disabled: false };
+    if (b.unlock && b.unlock.type === "shop") {
+      var price = b.unlock.price || 0;
+      var afford = shards >= price;
+      return { text: price + " " + currencySymbol(), color: C.GOLD, action: "buy", label: "ACHETER", disabled: !afford };
+    }
+    if (b.unlock && b.unlock.type === "streak") {
+      return { text: "SÉRIE " + (b.unlock.value || 0) + " J", color: C.MG, action: null, label: null, disabled: true };
+    }
+    return { text: "", color: C.TEXT, action: null, label: null, disabled: true };
   }
 
   // ---------------------------------------------------------------- init/resize
@@ -274,6 +292,27 @@ var BladeUI = (function () {
     }
     ctx.restore();
   }
+  // ---------------------------------------------------------------- shop blade preview (static trail arc)
+  function drawBladePreview(cx, cy, r, def, dt) {
+    var b = def || blade;
+    var n = 14, pts = [];
+    for (var i = 0; i <= n; i++) {
+      var t = i / n;
+      var ang = -Math.PI * 0.72 + t * Math.PI * 1.44;
+      pts.push({ x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r * 0.72 });
+    }
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (var pass = 0; pass < 2; pass++) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+      if (pass === 0) { ctx.strokeStyle = b.outer; ctx.lineWidth = Math.max(10, r * 0.22); ctx.shadowBlur = 26; ctx.shadowColor = b.glow; }
+      else { ctx.strokeStyle = b.inner; ctx.lineWidth = Math.max(3, r * 0.07); ctx.shadowBlur = 14; ctx.shadowColor = b.glow; }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   function drawParticles() {
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i], al = p.life / p.max;
@@ -394,9 +433,11 @@ var BladeUI = (function () {
   function drawTitleScreen(dt, view) {
     var jit = Math.sin(titleT * 30) > 0.9 ? (Math.random() - 0.5) * 8 : 0;
     var verMid = (typeof CONFIG !== "undefined" && CONFIG.VERSION) ? CONFIG.VERSION : "?";
-    var meta = view.meta || { best: 0, daily: { streak: 0 } };
+    var meta = view.meta || { best: 0, daily: { streak: 0 }, shards: 0 };
     var menu = view.menu || { blades: [], bladeIndex: 0, muted: false };
     var landscape = W > H;
+
+    txt((meta.shards || 0) + " " + currencySymbol(), 16, 26, Math.round(MIN * 0.032), C.GOLD, "left", true);
 
     if (landscape) {
       // ---- left column (~40% W) : logo + subtitle + version ----
@@ -414,19 +455,23 @@ var BladeUI = (function () {
       var bw = W * 0.40, bh = H * 0.16;
       var colRX = W * 0.72;
       var bx = colRX - bw / 2;
-      var gap = H * 0.055;
-      var totalH = bh * 2 + gap;
-      var arcadeY = H * 0.5 - totalH / 2;
+      var gap = H * 0.05;
+      var shopBh = bh * 0.5, shopGap = gap * 0.7;
+      var totalH = bh * 2 + gap + shopGap + shopBh;
+      var arcadeY = H * 0.5 - totalH / 2 - MIN * 0.02;
       var dailyY = arcadeY + bh + gap;
+      var shopY = dailyY + bh + shopGap;
 
       drawMenuButton(bx, arcadeY, bw, bh, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
       drawMenuButton(bx, dailyY, bw, bh, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      drawMenuButton(bx, shopY, bw, shopBh, "BOUTIQUE", C.GOLD, null);
 
       btnRects.TITLE.arcade = { x: bx, y: arcadeY, w: bw, h: bh };
       btnRects.TITLE.daily = { x: bx, y: dailyY, w: bw, h: bh };
+      btnRects.TITLE.shop = { x: bx, y: shopY, w: bw, h: shopBh };
 
       // blade selector below the buttons, arrows spread wide
-      var rowY = dailyY + bh + MIN * 0.15;
+      var rowY = shopY + shopBh + MIN * 0.12;
       var b = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
       var label = b.name + (b.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label, colRX, rowY, Math.round(MIN * 0.05), b.glow || C.MG, "center", true);
@@ -449,18 +494,22 @@ var BladeUI = (function () {
       txt("VERSION " + verMid, W / 2, H * 0.425, Math.round(MIN * 0.042), C.GOLD, "center", true);
 
       var bw2 = MIN * 0.56, bh2 = MIN * 0.105;
-      var arcadeY2 = H * 0.46;
+      var arcadeY2 = H * 0.44;
       var dailyY2 = arcadeY2 + bh2 + MIN * 0.05;
+      var shopBh2 = bh2 * 0.7;
+      var shopY2 = dailyY2 + bh2 + MIN * 0.04;
       var bx2 = W / 2 - bw2 / 2;
 
       drawMenuButton(bx2, arcadeY2, bw2, bh2, "ARCADE", C.CY, "RECORD " + (meta.best || 0));
       drawMenuButton(bx2, dailyY2, bw2, bh2, "DÉFI DU JOUR", C.MG, "SÉRIE " + ((meta.daily && meta.daily.streak) || 0) + " J");
+      drawMenuButton(bx2, shopY2, bw2, shopBh2, "BOUTIQUE", C.GOLD, null);
 
       btnRects.TITLE.arcade = { x: bx2, y: arcadeY2, w: bw2, h: bh2 };
       btnRects.TITLE.daily = { x: bx2, y: dailyY2, w: bw2, h: bh2 };
+      btnRects.TITLE.shop = { x: bx2, y: shopY2, w: bw2, h: shopBh2 };
 
       // blade selector
-      var rowY2 = dailyY2 + bh2 + MIN * 0.11;
+      var rowY2 = shopY2 + shopBh2 + MIN * 0.09;
       var b2 = menu.blades[menu.bladeIndex] || { name: "NÉON", glow: C.MG, unlocked: true };
       var label2 = b2.name + (b2.unlocked === false ? "  [VERROUILLÉ]" : "");
       txt(label2, W / 2, rowY2, Math.round(MIN * 0.04), b2.glow || C.MG, "center", true);
@@ -530,6 +579,9 @@ var BladeUI = (function () {
     txt("SYSTÈME COMPROMIS", tx, H * 0.24, Math.round(MIN * 0.065), C.DANGER, align, true);
     txt("SCORE " + state.score, tx, H * 0.40, Math.round(MIN * 0.06), C.CY, align, true);
     txt("RECORD " + (meta.best || 0), tx, H * 0.52, Math.round(MIN * 0.04), C.MG, align, true);
+    if (menu.shardsEarnedThisRun > 0) {
+      txt("+" + menu.shardsEarnedThisRun + " " + currencySymbol(), tx, H * 0.585, Math.round(MIN * 0.032), C.GOLD, align, true);
+    }
 
     var unlocked = menu.unlockedThisRun || [];
     if (unlocked.length) {
@@ -556,6 +608,9 @@ var BladeUI = (function () {
     txt("DÉFI RÉUSSI", tx, H * 0.24, Math.round(MIN * 0.065), C.GOLD, align, true);
     txt("SCORE " + state.score, tx, H * 0.40, Math.round(MIN * 0.06), C.CY, align, true);
     txt("SÉRIE " + streak + " J", tx, H * 0.52, Math.round(MIN * 0.04), C.MG, align, true);
+    if (menu.shardsEarnedThisRun > 0) {
+      txt("+" + menu.shardsEarnedThisRun + " " + currencySymbol(), tx, H * 0.585, Math.round(MIN * 0.032), C.GOLD, align, true);
+    }
 
     var unlocked = menu.unlockedThisRun || [];
     if (unlocked.length) {
@@ -565,6 +620,88 @@ var BladeUI = (function () {
     }
 
     if (landscape) drawEndButtonsLandscape("WIN"); else drawEndButtonsPortrait("WIN");
+  }
+
+  // ---------------------------------------------------------------- shop screen
+  function drawShopScreen(view) {
+    var meta = view.meta || { shards: 0 };
+    var menu = view.menu || { blades: [], shopIndex: 0 };
+    var blades = menu.blades || [];
+    var idx = menu.shopIndex || 0;
+    if (idx < 0 || idx >= blades.length) idx = 0;
+    var b = blades[idx] || null;
+    var shards = (typeof meta.shards === "number") ? meta.shards : 0;
+    var landscape = W > H;
+
+    btnRects.SHOP = {};
+
+    txt("BOUTIQUE", W / 2, H * 0.10, Math.round(MIN * 0.06), C.GOLD, "center", true);
+    txt(shards + " " + currencySymbol(), W / 2, H * 0.17, Math.round(MIN * 0.036), C.CY, "center", true);
+
+    var st = bladeStatus(b, shards);
+
+    if (landscape) {
+      var previewCx = W * 0.27, previewCy = H * 0.52, previewR = MIN * 0.15;
+      if (b) drawBladePreview(previewCx, previewCy, previewR, b);
+      txt(b ? b.name : "—", previewCx, previewCy + previewR * 1.1 + MIN * 0.05, Math.round(MIN * 0.05), b ? b.glow : C.TEXT, "center", true);
+
+      var arrowY = previewCy;
+      var arrowHalf = MIN * 0.05;
+      var prevX = previewCx - previewR - MIN * 0.09, nextX = previewCx + previewR + MIN * 0.09;
+      txt("◀", prevX, arrowY, Math.round(MIN * 0.055), "#eafcff", "center", true);
+      txt("▶", nextX, arrowY, Math.round(MIN * 0.055), "#eafcff", "center", true);
+      btnRects.SHOP.shopPrev = { x: prevX - arrowHalf, y: arrowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+      btnRects.SHOP.shopNext = { x: nextX - arrowHalf, y: arrowY - arrowHalf, w: arrowHalf * 2, h: arrowHalf * 2 };
+
+      var infoCX = W * 0.72;
+      txt(st.text, infoCX, H * 0.38, Math.round(MIN * 0.045), st.color, "center", true);
+
+      if (st.label) {
+        var bw = W * 0.30, bh = H * 0.16;
+        var bx = infoCX - bw / 2, by = H * 0.48;
+        var col = st.disabled ? "#555" : st.color;
+        ctx.save();
+        ctx.globalAlpha = st.disabled ? 0.5 : 1;
+        drawMenuButton(bx, by, bw, bh, st.label, col, null);
+        ctx.restore();
+        if (!st.disabled) btnRects.SHOP[st.action] = { x: bx, y: by, w: bw, h: bh };
+      }
+
+      var backW = W * 0.24, backH = H * 0.12;
+      var backX = infoCX - backW / 2, backY = H * 0.72;
+      drawMenuButton(backX, backY, backW, backH, "RETOUR", C.MG, null);
+      btnRects.SHOP.back = { x: backX, y: backY, w: backW, h: backH };
+    } else {
+      var pCx = W / 2, pCy = H * 0.30, pR = MIN * 0.14;
+      if (b) drawBladePreview(pCx, pCy, pR, b);
+      txt(b ? b.name : "—", pCx, pCy + pR * 1.15 + MIN * 0.04, Math.round(MIN * 0.045), b ? b.glow : C.TEXT, "center", true);
+
+      var aY = pCy;
+      var aHalf = MIN * 0.045;
+      var pPrevX = pCx - pR - MIN * 0.10, pNextX = pCx + pR + MIN * 0.10;
+      txt("◀", pPrevX, aY, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      txt("▶", pNextX, aY, Math.round(MIN * 0.05), "#eafcff", "center", true);
+      btnRects.SHOP.shopPrev = { x: pPrevX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
+      btnRects.SHOP.shopNext = { x: pNextX - aHalf, y: aY - aHalf, w: aHalf * 2, h: aHalf * 2 };
+
+      txt(st.text, pCx, H * 0.56, Math.round(MIN * 0.04), st.color, "center", true);
+
+      if (st.label) {
+        var pbw = MIN * 0.5, pbh = MIN * 0.11;
+        var pbx = pCx - pbw / 2, pby = H * 0.62;
+        var pcol = st.disabled ? "#555" : st.color;
+        ctx.save();
+        ctx.globalAlpha = st.disabled ? 0.5 : 1;
+        drawMenuButton(pbx, pby, pbw, pbh, st.label, pcol, null);
+        ctx.restore();
+        if (!st.disabled) btnRects.SHOP[st.action] = { x: pbx, y: pby, w: pbw, h: pbh };
+      }
+
+      var pBackW = MIN * 0.4, pBackH = MIN * 0.09;
+      var pBackX = pCx - pBackW / 2, pBackY = H * 0.80;
+      drawMenuButton(pBackX, pBackY, pBackW, pBackH, "RETOUR", C.MG, null);
+      btnRects.SHOP.back = { x: pBackX, y: pBackY, w: pBackW, h: pBackH };
+    }
   }
 
   // ---------------------------------------------------------------- orientation overlay
@@ -608,6 +745,8 @@ var BladeUI = (function () {
     } else if (view.screen === "WIN") {
       drawPlay(view.engineState, view.mode);
       drawWinScreen(view);
+    } else if (view.screen === "SHOP") {
+      drawShopScreen(view);
     } else {
       drawPlay(view.engineState, view.mode);
       drawHomeButton();

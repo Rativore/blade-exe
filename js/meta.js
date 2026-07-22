@@ -32,6 +32,7 @@ var BladeMeta = (function () {
       best: 0,
       bestCombo: 0,
       totalScore: 0,
+      shards: 0,
       blades: { unlocked: ['neon'], equipped: 'neon' },
       daily: { lastDate: null, streak: 0, scores: {} },
     };
@@ -48,6 +49,10 @@ var BladeMeta = (function () {
         save.best = typeof parsed.best === 'number' ? parsed.best : save.best;
         save.bestCombo = typeof parsed.bestCombo === 'number' ? parsed.bestCombo : save.bestCombo;
         save.totalScore = typeof parsed.totalScore === 'number' ? parsed.totalScore : save.totalScore;
+        // migration : anciennes sauvegardes sans shards -> shards:0 (défaut déjà posé
+        // par defaults()) ; les lames déjà unlocked (anciens types total/best) restent
+        // telles quelles, on ne les retire jamais.
+        save.shards = typeof parsed.shards === 'number' ? parsed.shards : save.shards;
         if (parsed.blades) {
           save.blades.unlocked = Array.isArray(parsed.blades.unlocked) ? parsed.blades.unlocked : save.blades.unlocked;
           save.blades.equipped = parsed.blades.equipped || save.blades.equipped;
@@ -104,9 +109,9 @@ var BladeMeta = (function () {
       if (s.blades.unlocked.indexOf(b.id) !== -1) return;
       var u = b.unlock;
       var reached = false;
+      // 'default' : possédée d'office ; 'streak' : série quotidienne ;
+      // 'shop' : ne se déverrouille QUE via buyBlade (jamais ici).
       if (u.type === 'default') reached = true;
-      else if (u.type === 'total') reached = s.totalScore >= u.value;
-      else if (u.type === 'best') reached = s.best >= u.value;
       else if (u.type === 'streak') reached = s.daily.streak >= u.value;
       if (reached) {
         s.blades.unlocked.push(b.id);
@@ -129,6 +134,9 @@ var BladeMeta = (function () {
     if (maxCombo > s.bestCombo) s.bestCombo = maxCombo;
     s.totalScore += score;
 
+    var shardsEarned = 0;
+    var lastDateBefore = s.daily.lastDate; // capturé AVANT toute mise à jour de ce run
+
     if (mode === 'daily') {
       var prevScore = s.daily.scores[dateStr];
       s.daily.scores[dateStr] = (typeof prevScore === 'number') ? Math.max(prevScore, score) : score;
@@ -145,13 +153,40 @@ var BladeMeta = (function () {
           s.daily.streak = 1;
           s.daily.lastDate = dateStr;
         }
+        // première réussite du jour = lastDate (avant appel) !== dateStr
+        if (lastDateBefore !== dateStr) {
+          shardsEarned = CONFIG.ECONOMY.DAILY_WIN_REWARD + CONFIG.ECONOMY.DAILY_STREAK_BONUS * s.daily.streak;
+        }
       }
+    } else if (mode === 'arcade') {
+      shardsEarned = Math.floor(score / CONFIG.ECONOMY.ARCADE_RATE);
     }
+
+    s.shards += shardsEarned;
 
     var unlocked = checkUnlocks();
     persist();
 
-    return { newBest: newBest, unlocked: unlocked, streak: s.daily.streak };
+    return { newBest: newBest, unlocked: unlocked, streak: s.daily.streak, shardsEarned: shardsEarned, shards: s.shards };
+  }
+
+  function buyBlade(id) {
+    var s = get();
+    var blade = null;
+    for (var i = 0; i < CONFIG.BLADES.length; i++) {
+      if (CONFIG.BLADES[i].id === id) { blade = CONFIG.BLADES[i]; break; }
+    }
+    // refus : lame inconnue ou pas de type 'shop' (default/streak ne s'achètent pas)
+    if (!blade || blade.unlock.type !== 'shop') return { ok: false, shards: s.shards };
+    // refus : déjà possédée
+    if (s.blades.unlocked.indexOf(id) !== -1) return { ok: false, shards: s.shards };
+    // refus : solde insuffisant
+    if (s.shards < blade.unlock.price) return { ok: false, shards: s.shards };
+
+    s.shards -= blade.unlock.price;
+    s.blades.unlocked.push(id);
+    persist();
+    return { ok: true, shards: s.shards };
   }
 
   function getBlades() {
@@ -178,6 +213,7 @@ var BladeMeta = (function () {
     recordRun: recordRun,
     getBlades: getBlades,
     equipBlade: equipBlade,
+    buyBlade: buyBlade,
     todayStr: todayStr,
   };
 

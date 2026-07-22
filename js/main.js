@@ -49,7 +49,9 @@
     blades: blades,
     bladeIndex: equippedIdx,
     muted: false,
-    unlockedThisRun: []
+    unlockedThisRun: [],
+    shopIndex: 0,
+    shardsEarnedThisRun: 0
   };
 
   function refreshMeta() {
@@ -78,6 +80,7 @@
     var res = BladeMeta.recordRun({ mode: currentMode, score: e.score, maxCombo: e.maxCombo, dateStr: dateStr });
     refreshMeta();
     menu.unlockedThisRun = res.unlocked || [];
+    menu.shardsEarnedThisRun = res.shardsEarned || 0;
     BladeAudio.stopMusic();
     BladeAudio.startMusic("menu");
     screen = nextScreen;
@@ -130,7 +133,35 @@
         break;
       case "bladePrev": cycleBlade(-1); break;
       case "bladeNext": cycleBlade(1); break;
+      case "shop": BladeAudio.play("click"); screen = "SHOP"; break;
+      case "back": BladeAudio.play("click"); screen = "TITLE"; break;
+      case "shopPrev": shopCycle(-1); break;
+      case "shopNext": shopCycle(1); break;
+      case "buy": buyShopBlade(); break;
+      case "equip": equipShopBlade(); break;
       default: break;
+    }
+  }
+  function shopCycle(dir) {
+    var n = menu.blades.length;
+    if (!n) return;
+    menu.shopIndex = ((menu.shopIndex + dir) % n + n) % n;
+    BladeAudio.play("click");
+  }
+  function buyShopBlade() {
+    var b = menu.blades[menu.shopIndex];
+    if (!b) return;
+    var res = BladeMeta.buyBlade(b.id);
+    refreshMeta();
+    BladeAudio.play(res && res.ok ? "bossDone" : "wrong");
+  }
+  function equipShopBlade() {
+    var b = menu.blades[menu.shopIndex];
+    if (!b) return;
+    var ok = BladeMeta.equipBlade(b.id);
+    if (ok) {
+      BladeUI.setBlade(b);
+      refreshMeta();
     }
   }
 

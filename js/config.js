@@ -18,7 +18,7 @@
 
 var CONFIG = {
 
-  VERSION: '1.9',             // affichée à l'écran titre — à incrémenter
+  VERSION: '2.0',             // affichée à l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -81,12 +81,25 @@ var CONFIG = {
     DAILY_LOCALSTORAGE_NOTE: 'un seul score enregistré par date (le meilleur)',
   },
 
+  /* ------------------------------------------------ économie (monnaie IG) */
+  ECONOMY: {
+    CURRENCY: 'ÉCLATS',       // monnaie in-game, symbole ◆
+    SYMBOL: '◆',
+    DAILY_WIN_REWARD: 100,    // première réussite du défi du jour uniquement
+    DAILY_STREAK_BONUS: 10,   // + BONUS × série (après incrément) à chaque réussite
+    ARCADE_RATE: 1000,        // arcade : floor(score / RATE) éclats par partie
+  },
+
   /* ------------------------------------------------ lames cosmétiques (trail) */
-  // unlock.type: 'default' | 'total' (score cumulé) | 'best' (record arcade) | 'streak' (série quotidienne)
+  // unlock.type: 'default' | 'shop' (achat en éclats, price) | 'streak'
+  // (série quotidienne — trophées NON achetables). Ordre = ordre d'affichage.
   BLADES: [
     { id: 'neon',    name: 'NÉON',    outer: 'rgba(255,31,208,0.5)', inner: '#eafcff', glow: '#ff1fd0', unlock: { type: 'default' } },
-    { id: 'plasma',  name: 'PLASMA',  outer: 'rgba(57,255,20,0.5)',  inner: '#eaffea', glow: '#39ff14', unlock: { type: 'total',  value: 5000 } },
-    { id: 'aurum',   name: 'AURUM',   outer: 'rgba(255,208,0,0.5)',  inner: '#fff6d0', glow: '#ffd000', unlock: { type: 'best',   value: 2500 } },
+    { id: 'volt',    name: 'VOLT',    outer: 'rgba(234,255,0,0.5)',  inner: '#fdffe0', glow: '#eaff00', unlock: { type: 'shop',   price: 150 } },
+    { id: 'plasma',  name: 'PLASMA',  outer: 'rgba(57,255,20,0.5)',  inner: '#eaffea', glow: '#39ff14', unlock: { type: 'shop',   price: 300 } },
+    { id: 'oni',     name: 'ONI',     outer: 'rgba(162,107,255,0.5)',inner: '#f0e8ff', glow: '#a26bff', unlock: { type: 'shop',   price: 450 } },
+    { id: 'aurum',   name: 'AURUM',   outer: 'rgba(255,208,0,0.5)',  inner: '#fff6d0', glow: '#ffd000', unlock: { type: 'shop',   price: 600 } },
+    { id: 'spectre', name: 'SPECTRE', outer: 'rgba(0,255,200,0.5)',  inner: '#e0fff8', glow: '#00ffc8', unlock: { type: 'shop',   price: 1000 } },
     { id: 'glitch',  name: 'GLITCH',  outer: 'rgba(255,43,74,0.5)',  inner: '#ffe0e6', glow: '#ff2b4a', unlock: { type: 'streak', value: 3 } },
     { id: 'phantom', name: 'PHANTOM', outer: 'rgba(255,255,255,0.4)',inner: '#ffffff', glow: '#ffffff', unlock: { type: 'streak', value: 7 } },
   ],
@@ -165,18 +178,26 @@ var CONFIG = {
  * ------------------------------------------------------------------ meta.js
  * BladeMeta.load() → save (crée les défauts si absent ; localStorage
  *   CONFIG.SAVE_KEY ; fallback mémoire si localStorage indisponible → Node OK)
- * save = { best, bestCombo, totalScore,
+ * save = { best, bestCombo, totalScore, shards,
  *          blades: { unlocked:['neon',...], equipped:'neon' },
  *          daily:  { lastDate:'YYYY-MM-DD'|null, streak:0, scores:{date:score} } }
+ *   Migration : anciennes sauvegardes sans shards → shards:0 ; lames déjà
+ *   unlocked (anciens types total/best) RESTENT unlocked telles quelles.
  * BladeMeta.get() → save courant (load() implicite au premier accès)
  * BladeMeta.recordRun({mode:'arcade'|'daily', score, maxCombo, dateStr}) →
- *   { newBest:bool, unlocked:[bladeId,...], streak }
+ *   { newBest:bool, unlocked:[bladeId,...], streak, shardsEarned, shards }
  *   - met à jour best/bestCombo/totalScore, persiste ;
  *   - mode daily : scores[dateStr] = max(existant, score) toujours enregistré,
  *     mais la série ne bouge QUE si le défi est réussi (score >= CONFIG.DAILY.GOAL) :
  *     streak +1 si lastDate = veille, reset à 1 si trou, inchangé si même jour
  *     (lastDate n'est posé que sur une réussite) ;
- *   - déverrouille les lames dont la condition est atteinte (CONFIG.BLADES).
+ *   - ÉCLATS : réussite du défi ET lastDate !== dateStr avant l'appel (première
+ *     réussite du jour) → shardsEarned = DAILY_WIN_REWARD + DAILY_STREAK_BONUS ×
+ *     streak (après incrément) ; mode arcade → floor(score / ARCADE_RATE) ;
+ *     défi rejoué ou raté → 0 ; shards += shardsEarned ;
+ *   - déverrouille les lames 'streak' dont la condition est atteinte.
+ * BladeMeta.buyBlade(id) → { ok:bool, shards }  — refus si pas type 'shop',
+ *   déjà possédée, ou shards < price ; sinon débite, ajoute à unlocked, persiste.
  * BladeMeta.getBlades() → [{...blade, unlocked:bool, equipped:bool}]
  * BladeMeta.equipBlade(id) → bool (refus si verrouillée)
  * BladeMeta.todayStr(d?) → 'YYYY-MM-DD' locale
@@ -205,7 +226,15 @@ var CONFIG = {
  * BladeUI.init(canvas)         // garde ctx, gère DPR (cap 2) — reprendre resize() maquette
  * BladeUI.resize()             // recalcule W,H,MIN ; retourne {w,h}
  * BladeUI.render(dt, view)     // dessine une frame complète ; view =
- *   { screen:'TITLE'|'PLAY'|'OVER'|'WIN', engineState|null, meta, menu, mode }
+ *   { screen:'TITLE'|'PLAY'|'OVER'|'WIN'|'SHOP', engineState|null, meta, menu, mode }
+ *   BOUTIQUE (screen SHOP) : solde ◆ en haut, carrousel de lames (une à la
+ *   fois, ◀ ▶) avec aperçu de la traînée en couleur, nom, prix ou état
+ *   (POSSÉDÉE / ÉQUIPÉE / RÉCOMPENSE DE SÉRIE x J), gros bouton contextuel
+ *   ACHETER (si achetable et solde suffisant, grisé sinon) ou ÉQUIPER (si
+ *   possédée), bouton RETOUR. btnRects.SHOP → 'shopPrev'|'shopNext'|'buy'|
+ *   'equip'|'back'. TITLE : bouton BOUTIQUE (sous les 2 modes) + solde ◆
+ *   affiché ; OVER/WIN : ligne « +X ◆ » (shardsEarned du run, via
+ *   menu.shardsEarnedThisRun). Layout paysage 2 colonnes comme le reste.
  *   En mode daily (screen PLAY) : barre de progression fixe en haut, sous le
  *   HUD — remplissage score/CONFIG.DAILY.GOAL, libellé 'DÉFI x%', passe dorée
  *   (GOLD) et pulse à >85 %. Écran WIN = 'DÉFI RÉUSSI' + score + série +
@@ -226,7 +255,9 @@ var CONFIG = {
  * sélecteur de lame + bouton son ; OVER = SYSTÈME COMPROMIS, score, record,
  * lames débloquées ce run, REJOUER + MENU. Boutons = zones cliquables que
  * BladeUI.hitTest(x,y,screen) → 'arcade'|'daily'|'replay'|'menu'|'mute'|
- * 'bladePrev'|'bladeNext'|'home'|null (main.js route les taps).
+ * 'bladePrev'|'bladeNext'|'home'|'shop'|'shopPrev'|'shopNext'|'buy'|'equip'|
+ * 'back'|null (main.js route les taps ; écran SHOP : état du carrousel dans
+ * menu.shopIndex, actions buy/equip sur la lame menu.blades[menu.shopIndex]).
  * PLAY : bouton ⌂ ACCUEIL discret en haut à gauche, SOUS le score (dans la
  * zone HUD protégée par SPAWN_MARGIN_TOP) → btnRects.PLAY.home ; permet de
  * quitter la partie en cours pour revenir au menu.
@@ -247,6 +278,11 @@ var CONFIG = {
  * ACCUEIL EN JEU : en PLAY, onDown teste d'abord hitTest(x,y,'PLAY') ;
  * si 'home' → terminer le run comme une fin de partie (recordRun avec le
  * score courant, musique menu, écran TITLE), sinon stroke normal.
+ * BOUTIQUE : écran SHOP (pas d'engine) — 'shop' depuis TITLE, 'back' →
+ * TITLE ; 'buy' → BladeMeta.buyBlade + son 'bossDone' si ok / 'wrong' si
+ * refus ; 'equip' → equipBlade + setBlade ; menu.shopIndex pour le carrousel.
+ * Fin de run : menu.shardsEarnedThisRun = recordRun().shardsEarned (affiché
+ * sur OVER/WIN) ; musique menu conservée sur SHOP.
  * ========================================================================== */
 
 if (typeof window !== 'undefined') window.CONFIG = CONFIG;

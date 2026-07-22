@@ -247,20 +247,22 @@ function freshMeta() {
   check('d3b) échec quotidien -> score enregistré mais streak/lastDate ne bougent pas', scFail === 400 && streakFail === 0 && M.get().daily.lastDate === null,
     'score=' + scFail + ' streak=' + streakFail + ' lastDate=' + M.get().daily.lastDate);
 
-  // d4 : unlock 'best' (record arcade >= 2500) -> aurum
+  // d4 : AURUM (type 'shop') ne se déverrouille PLUS jamais via un record arcade
   M = freshMeta();
-  var u1 = M.recordRun({ mode: 'arcade', score: 2500, maxCombo: 10 });
-  check('d4) unlock AURUM au record >= 2500', u1.unlocked.indexOf('aurum') !== -1,
-    'unlocked=[' + u1.unlocked.join(',') + ']');
+  var u1 = M.recordRun({ mode: 'arcade', score: 9999, maxCombo: 10 });
+  var aurumAfterRecord = M.getBlades().filter(function (b) { return b.id === 'aurum'; })[0].unlocked;
+  check('d4) AURUM (shop) NE se déverrouille PAS via un record arcade', u1.unlocked.indexOf('aurum') === -1 && aurumAfterRecord === false,
+    'unlocked=[' + u1.unlocked.join(',') + '] aurum.unlocked=' + aurumAfterRecord);
 
-  // d5 : unlock 'total' (score cumulé >= 5000) -> plasma
+  // d5 : PLASMA (type 'shop') ne se déverrouille PLUS jamais via le cumul de score
   M = freshMeta();
-  M.recordRun({ mode: 'arcade', score: 2000, maxCombo: 1 });
-  M.recordRun({ mode: 'arcade', score: 2000, maxCombo: 1 });
-  var u3 = M.recordRun({ mode: 'arcade', score: 2000, maxCombo: 1 }); // total 6000
+  M.recordRun({ mode: 'arcade', score: 9000, maxCombo: 1 });
+  M.recordRun({ mode: 'arcade', score: 9000, maxCombo: 1 });
+  var u3 = M.recordRun({ mode: 'arcade', score: 9000, maxCombo: 1 }); // total 27000
   var blades = M.getBlades();
   var plasmaUnlocked = blades.filter(function (b) { return b.id === 'plasma'; })[0].unlocked;
-  check('d5) unlock PLASMA au cumul >= 5000', plasmaUnlocked === true, 'total unlock via getBlades');
+  check('d5) PLASMA (shop) NE se déverrouille PAS via le cumul de score', u3.unlocked.indexOf('plasma') === -1 && plasmaUnlocked === false,
+    'unlocked=[' + u3.unlocked.join(',') + '] plasma.unlocked=' + plasmaUnlocked);
 
   // d6 : unlock 'streak' (série quotidienne >= 3, réussites >= 1200) -> glitch
   M = freshMeta();
@@ -292,6 +294,83 @@ function freshMeta() {
     + ', dailyWinEvents=' + d.dailyWinEvents + ', eventsAfterWin=' + d.eventsAfterWin
     + ', spawnGrewAfterWin=' + d.spawnGrewAfterWin + ', livesDroppedAfterWin=' + d.livesDroppedAfterWin
     + (d.threw ? ', EXC=' + d.err : ''));
+})();
+
+/* ==================================================== CASE e2-e4 : économie */
+(function () {
+  // e2 : première réussite quotidienne -> shardsEarned = 100 + 10*streak ; rejouer le même jour -> 0
+  var M = freshMeta();
+  var win1 = M.recordRun({ mode: 'daily', score: 1250, maxCombo: 5, dateStr: '2026-07-20' });
+  var expected1 = 100 + 10 * win1.streak; // streak=1 -> 110
+  var replaySameDay = M.recordRun({ mode: 'daily', score: 1300, maxCombo: 5, dateStr: '2026-07-20' });
+  check('e2) 1ère réussite daily -> shardsEarned=100+10*streak, rejouer le même jour -> 0',
+    win1.shardsEarned === expected1 && win1.shardsEarned === 110 && win1.shards === 110
+    && replaySameDay.shardsEarned === 0 && replaySameDay.shards === 110,
+    'win1=' + win1.shardsEarned + '/' + win1.shards + ' replay=' + replaySameDay.shardsEarned + '/' + replaySameDay.shards);
+
+  // e3 : arcade -> floor(score / ARCADE_RATE) éclats
+  var M3 = freshMeta();
+  var arc = M3.recordRun({ mode: 'arcade', score: 2600, maxCombo: 3 });
+  check('e3) arcade 2600 pts -> 2 éclats', arc.shardsEarned === 2 && arc.shards === 2,
+    'shardsEarned=' + arc.shardsEarned + ' shards=' + arc.shards);
+
+  // e4 : buyBlade — refus solde insuffisant / achat OK / re-achat refusé / lame 'streak' refusée
+  var M4 = freshMeta();
+  var refuseNoMoney = M4.buyBlade('volt'); // shards=0, price 150
+  var funded = M4.recordRun({ mode: 'arcade', score: 200000, maxCombo: 1 }); // 200 éclats
+  var buyOk = M4.buyBlade('volt'); // price 150 -> ok, reste 50
+  var buyAgain = M4.buyBlade('volt'); // déjà possédée -> refus
+  var buyStreak = M4.buyBlade('glitch'); // type 'streak' -> jamais achetable -> refus
+  check('e4) buyBlade — refus solde insuffisant, achat OK débite+déverrouille, re-achat refusé, lame streak refusée',
+    refuseNoMoney.ok === false && refuseNoMoney.shards === 0
+    && funded.shards === 200
+    && buyOk.ok === true && buyOk.shards === 50
+    && M4.getBlades().filter(function (b) { return b.id === 'volt'; })[0].unlocked === true
+    && buyAgain.ok === false && buyAgain.shards === 50
+    && buyStreak.ok === false && buyStreak.shards === 50,
+    'refuse=' + refuseNoMoney.ok + ' buyOk=' + buyOk.ok + '/' + buyOk.shards
+    + ' buyAgain=' + buyAgain.ok + ' buyStreak=' + buyStreak.ok);
+})();
+
+/* ========================================================= CASE e5 : migration */
+(function () {
+  // e5 : une ancienne sauvegarde sans champ shards, chargée -> shards 0, unlocked conservées
+  var pCfg = require.resolve('../js/config.js');
+  var pMeta = require.resolve('../js/meta.js');
+  delete require.cache[pCfg];
+  delete require.cache[pMeta];
+
+  var fakeLS = {
+    _store: {},
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(this._store, k) ? this._store[k] : null; },
+    setItem: function (k, v) { this._store[k] = String(v); },
+  };
+  var hadWindow = typeof global.window !== 'undefined';
+  var prevWindow = global.window;
+  global.window = { localStorage: fakeLS }; // force meta.js à passer par le fallback "localStorage"
+
+  var oldSave = {
+    // ancienne sauvegarde SANS champ shards (avant l'introduction de l'économie)
+    best: 4200, bestCombo: 12, totalScore: 15000,
+    blades: { unlocked: ['neon', 'aurum', 'plasma'], equipped: 'aurum' },
+    daily: { lastDate: '2026-07-18', streak: 2, scores: { '2026-07-18': 1300 } },
+  };
+  fakeLS.setItem('bladeExeSave.v1', JSON.stringify(oldSave));
+
+  var M5 = require('../js/meta.js');
+  var loaded = M5.load();
+
+  check('e5) migration — save sans shards -> shards 0, unlocked conservées',
+    loaded.shards === 0
+    && loaded.blades.unlocked.indexOf('aurum') !== -1
+    && loaded.blades.unlocked.indexOf('plasma') !== -1
+    && loaded.blades.equipped === 'aurum',
+    'shards=' + loaded.shards + ' unlocked=[' + loaded.blades.unlocked.join(',') + ']');
+
+  // restauration de l'environnement Node pour ne pas polluer d'éventuels tests suivants
+  if (hadWindow) global.window = prevWindow; else delete global.window;
+  delete require.cache[pCfg];
+  delete require.cache[pMeta];
 })();
 
 /* ---------------------------------------------------------------- rapport */
