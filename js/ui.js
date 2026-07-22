@@ -423,6 +423,7 @@ var BladeUI = (function () {
     btnRects.TITLE.mute = { x: mx, y: my, w: mw, h: mh };
 
     txt("TAP / CLIC POUR CHOISIR", W / 2, H * 0.94, Math.round(MIN * 0.032), "#8fd8e6", "center", false);
+    txt("v" + (typeof CONFIG !== "undefined" && CONFIG.VERSION ? CONFIG.VERSION : "?"), W - 8, H - 10, 11, "#4a6a75", "right", false);
   }
 
   // ---------------------------------------------------------------- over screen

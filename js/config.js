@@ -18,6 +18,10 @@
 
 var CONFIG = {
 
+  VERSION: '1.2',             // affichée en bas de l'écran titre — à incrémenter
+                              // à CHAQUE publication (sert à vérifier sur
+                              // téléphone que le cache Pages est bien à jour)
+
   /* ------------------------------------------------ identité & couleurs */
   COLORS: {
     BG: '#05020a',
