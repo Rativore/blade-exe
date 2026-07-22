@@ -920,7 +920,8 @@ var BladeUI = (function () {
 
     var buttons = [];
     if (res.success && res.hasNext) buttons.push({ key: "next", label: "SUIVANT", col: C.CY });
-    buttons.push({ key: "replay", label: "REJOUER", col: C.MG });
+    // niveau réussi = pas de REJOUER direct (comme le défi) — le rejeu passe par la grille
+    if (!res.success) buttons.push({ key: "replay", label: "REJOUER", col: C.MG });
     buttons.push({ key: "back", label: "NIVEAUX", col: C.GOLD });
 
     var bw, bh, gap, i;

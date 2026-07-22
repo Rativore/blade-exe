@@ -274,6 +274,8 @@
       case "replay":
         // le défi du jour ne se rejoue pas une fois réussi (écran WIN sans REJOUER, ceinture ici)
         if (currentMode === "daily" && menu.dailyDone) { BladeAudio.play("wrong"); break; }
+        // un niveau réussi ne se rejoue pas depuis LEVELEND (même principe) — passer par la grille
+        if (screen === "LEVELEND" && menu.levelResult && menu.levelResult.success) { BladeAudio.play("wrong"); break; }
         BladeAudio.play("click");
         if (screen === "LEVELEND") startLevel(menu.worldIndex, menu.levelIndex);
         else startRun(currentMode);
