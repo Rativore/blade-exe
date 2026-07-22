@@ -26,7 +26,9 @@ var BladeAds = (function () {
   }
 
   var state = {
-    runEndCount: 0,     // fins de partie comptabilisées (registerRunEnd)
+    endsSinceAd: 0,     // fins de partie depuis le dernier interstitiel affiché ;
+                        // >= EVERY = une pub est DUE et le reste tant qu'un
+                        // garde-fou la bloque (report, jamais de pub perdue)
     lastAdTime: 0,      // ms epoch du dernier interstitiel affiché (0 = jamais)
     bannerEl: null,     // élément DOM du bandeau TITLE (null si masqué)
   };
@@ -244,10 +246,12 @@ var BladeAds = (function () {
     opts = opts || {};
     var won = !!opts.won;
 
-    state.runEndCount += 1;
+    state.endsSinceAd += 1;
 
-    if (state.runEndCount % CONFIG.ADS.INTERSTITIAL_EVERY !== 0) return false;
+    // pas encore due
+    if (state.endsSinceAd < CONFIG.ADS.INTERSTITIAL_EVERY) return false;
 
+    // due, mais bloquée par un garde-fou → RESTE due (report à la fin suivante)
     var meta = getMeta();
     var gamesPlayed = (meta && meta.get) ? (meta.get().gamesPlayed || 0) : 0;
     if (gamesPlayed < CONFIG.ADS.INTERSTITIAL_MIN_GAMES) return false;
@@ -259,6 +263,7 @@ var BladeAds = (function () {
 
     if (won && CONFIG.ADS.NO_AD_AFTER_WIN) return false;
 
+    state.endsSinceAd = 0;
     state.lastAdTime = Date.now();
     currentProvider().showInterstitial();
     return true;
