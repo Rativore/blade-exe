@@ -19,7 +19,7 @@
 
 var CONFIG = {
 
-  VERSION: '2.9',             // affichée en bas à gauche de l'écran titre — à incrémenter
+  VERSION: '2.10',            // affichée en bas à gauche de l'écran titre — à incrémenter
                               // à CHAQUE publication (sert à vérifier sur
                               // téléphone que le cache Pages est bien à jour)
 
@@ -37,7 +37,11 @@ var CONFIG = {
   CUT: {
     TOLERANCE_DEG: 30,        // écart max geste↔flèche (en degrés, ±)
     MIN_SEG_PX: 4,            // déplacement mini pour qu'un segment ait une direction
-    WRONG_SHRINK: 0.7,        // mauvais sens → size *= 0.7 (repoussé)
+    WRONG_SHRINK: 1.0,        // mauvais sens → la bulle N'EST PLUS repoussée
+                              // (1.0 = taille inchangée, elle continue de
+                              // grossir). Correction du 2026-07-23 : à 0.7,
+                              // spammer à contre-sens gelait le jeu — l'objet
+                              // ne mûrissait jamais et bloquait les spawns.
     WRONG_COOLDOWN: 0.35,     // s d'immunité après un mauvais coup
     POINTS_BASE: 10,          // points par coupe = POINTS_BASE * mult
     COMBO_MULT_MAX: 8,        // multiplicateur plafonné
@@ -200,7 +204,8 @@ var CONFIG = {
  *   {type:'dailyWin', score, maxCombo}  // mode daily : score >= DAILY.GOAL → status 'WIN',
  *                                       // plus aucun spawn, le run s'arrête proprement
  * Règles reprises de la maquette : tolérance ±30°, un seul objet touché par
- * micro-segment, mauvais sens = shrink 0.7 + cooldown 0.35 s + combo=0,
+ * micro-segment, mauvais sens = shrink WRONG_SHRINK (1.0 = aucun recul,
+ * la croissance continue) + cooldown 0.35 s + combo=0,
  * virus tranché/touché = -1 vie, obj (non virus) à maxS = -1 vie,
  * mult = min(combo, 8), score += 10×mult, slow-mo 0.3 s tous les 10 combos.
  * Boss : hexagone centré, seq de bossSpec(n).seqLen coupes (flèche courante
